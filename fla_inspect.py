@@ -815,6 +815,32 @@ def _apply_mat(mat, x, y):
     a, b, c, d, tx, ty = mat
     return a*x + c*y + tx, b*x + d*y + ty
 
+_STRAY_THRESHOLD = 5000.0   # twips (250 px); shape entirely beyond this in BOTH axes → stray
+
+def _shape_is_stray(shape):
+    """True if all fill-edge geometry in this shape is far from origin in both X and Y.
+    Catches accidentally-left stage-reference art (e.g. RY_TailBit_7's ghost shape)."""
+    xs, ys = [], []
+    for edge in shape.iter(t('Edge')):
+        if not edge.get('fillStyle0') and not edge.get('fillStyle1'):
+            continue
+        es = edge.get('edges', '').strip()
+        if not es:
+            continue
+        try:
+            cmds = parse_edge_str(es)
+        except Exception:
+            continue
+        for c in cmds:
+            if c[0] == 'M':  xs.append(c[1]); ys.append(c[2])
+            elif c[0] == 'L': xs.append(c[1]); ys.append(c[2])
+            elif c[0] == 'Q': xs += [c[1], c[3]]; ys += [c[2], c[4]]
+    if not xs:
+        return False
+    return (min(abs(x) for x in xs) > _STRAY_THRESHOLD and
+            min(abs(y) for y in ys) > _STRAY_THRESHOLD)
+
+
 def _collect_shape_pts(shape):
     """Fill-edge geometry points in a DOMShape (local space, untransformed).
     Stroke-only edges (no fillStyle0/1) are excluded — they can live at
