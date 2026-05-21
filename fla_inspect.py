@@ -349,6 +349,35 @@ def _shape_svg_white(shape):
     return [f'<path d="{d}" fill="white" fill-rule="evenodd" stroke="none"/>']
 
 
+def _iter_group_shapes_white(group_elem):
+    """Recursively yield white-fill SVG lines for all DOMShapes inside a DOMGroup."""
+    members = group_elem.find(t('members'))
+    if members is None:
+        return
+    mc = group_elem.find(t('matrix'))
+    m  = mc.find(t('Matrix')) if mc is not None else None
+    xf = None
+    if m is not None:
+        a=float(m.get('a',1)); b=float(m.get('b',0))
+        c=float(m.get('c',0)); d=float(m.get('d',1))
+        tx=float(m.get('tx',0)); ty=float(m.get('ty',0))
+        if not (a==1 and b==0 and c==0 and d==1 and tx==0 and ty==0):
+            xf = f'matrix({a},{b},{c},{d},{tx},{ty})'
+    inner = []
+    for child in list(members):
+        if child.tag == t('DOMShape'):
+            inner.extend(_shape_svg_white(child))
+        elif child.tag == t('DOMGroup'):
+            inner.extend(_iter_group_shapes_white(child))
+    if inner:
+        if xf:
+            yield f'<g transform="{xf}">'
+            yield from inner
+            yield '</g>'
+        else:
+            yield from inner
+
+
 def _render_sym_white(name, symbols, inst_frame=0, visited=None, tx_scale=20.0):
     """Render a symbol entirely as white fills — used to build SVG mask shapes."""
     if visited is None:
@@ -375,6 +404,8 @@ def _render_sym_white(name, symbols, inst_frame=0, visited=None, tx_scale=20.0):
         for elem in list(elements):
             if elem.tag == t('DOMShape'):
                 lines.extend(_shape_svg_white(elem))
+            elif elem.tag == t('DOMGroup'):
+                lines.extend(_iter_group_shapes_white(elem))
             elif elem.tag == t('DOMSymbolInstance'):
                 child = elem.get('libraryItemName')
                 if not child or child in visited: continue
@@ -459,6 +490,33 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
             return []
         return ([f'<g transform="{xf}">'] if xf else ['<g>']) + cl + ['</g>']
 
+    def _group_lines(group_elem, white=False):
+        members = group_elem.find(t('members'))
+        if members is None:
+            return []
+        mc = group_elem.find(t('matrix'))
+        m  = mc.find(t('Matrix')) if mc is not None else None
+        xf = None
+        if m is not None:
+            a=float(m.get('a',1)); b=float(m.get('b',0))
+            c=float(m.get('c',0)); d=float(m.get('d',1))
+            tx=float(m.get('tx',0)); ty=float(m.get('ty',0))
+            if not (a==1 and b==0 and c==0 and d==1 and tx==0 and ty==0):
+                xf = f'matrix({a},{b},{c},{d},{tx},{ty})'
+        inner = []
+        for child in list(members):
+            if child.tag == t('DOMShape'):
+                inner.extend(_shape_svg_white(child) if white else _shape_svg(child, _defs, _grad_cache))
+            elif child.tag == t('DOMGroup'):
+                inner.extend(_group_lines(child, white))
+            elif child.tag == t('DOMSymbolInstance'):
+                inner.extend(_inst_lines(child, white))
+        if not inner:
+            return []
+        if xf:
+            return [f'<g transform="{xf}">'] + inner + ['</g>']
+        return inner
+
     def _layer_lines(layer, white=False):
         frame = _active_frame(layer, inst_frame)
         if frame is None: return []
@@ -468,6 +526,8 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
         for elem in list(elems):
             if elem.tag == t('DOMShape'):
                 out.extend(_shape_svg_white(elem) if white else _shape_svg(elem, _defs, _grad_cache))
+            elif elem.tag == t('DOMGroup'):
+                out.extend(_group_lines(elem, white=white))
             elif elem.tag == t('DOMSymbolInstance'):
                 out.extend(_inst_lines(elem, white=white))
         return out
@@ -552,6 +612,32 @@ def _collect_shape_pts(shape):
             elif c[0] == 'Q': pts += [(c[1], c[2]), (c[3], c[4])]
     return pts
 
+def _collect_group_pts(group_elem, mat):
+    """Recursively collect world-space points from all DOMShapes inside a DOMGroup."""
+    pts = []
+    mc = group_elem.find(t('matrix'))
+    m  = mc.find(t('Matrix')) if mc is not None else None
+    if m is not None:
+        local_mat = (
+            float(m.get('a', 1)), float(m.get('b', 0)),
+            float(m.get('c', 0)), float(m.get('d', 1)),
+            float(m.get('tx', 0)), float(m.get('ty', 0)),
+        )
+        effective = _compose_mat(mat, local_mat)
+    else:
+        effective = mat
+    members = group_elem.find(t('members'))
+    if members is None:
+        return pts
+    for child in list(members):
+        if child.tag == t('DOMShape'):
+            for lx, ly in _collect_shape_pts(child):
+                pts.append(_apply_mat(effective, lx, ly))
+        elif child.tag == t('DOMGroup'):
+            pts.extend(_collect_group_pts(child, effective))
+    return pts
+
+
 def _bbox_sym(name, symbols, inst_frame=0, visited=None, mat=None, tx_scale=20.0):
     """World-space AABB for a symbol hierarchy.  Returns (xmin,ymin,xmax,ymax) or None."""
     if visited is None: visited = set()
@@ -583,6 +669,9 @@ def _bbox_sym(name, symbols, inst_frame=0, visited=None, mat=None, tx_scale=20.0
             if elem.tag == t('DOMShape'):
                 for lx, ly in _collect_shape_pts(elem):
                     all_pts.append(_apply_mat(mat, lx, ly))
+
+            elif elem.tag == t('DOMGroup'):
+                all_pts.extend(_collect_group_pts(elem, mat))
 
             elif elem.tag == t('DOMSymbolInstance'):
                 child = elem.get('libraryItemName')
