@@ -427,13 +427,14 @@ def _render_sym_white(name, symbols, inst_frame=0, visited=None, tx_scale=20.0):
     return lines
 
 
-def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cache=None, _tx_scale=1.0):
+def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cache=None, _tx_scale=1.0, masking=True):
     """Recursively render a symbol and its children as SVG lines.
 
     Returns (body_lines, defs_lines).  defs_lines accumulates SVG <mask> and
     gradient definitions that must be emitted inside <defs> before the body.
     Pass _defs=[] on the first call; inner calls share the same list.
     _grad_cache is a {id(grad_elem): svg_id} dict shared across all shapes.
+    masking=False renders all layers as plain geometry (ignores SVG masking).
     """
     if _defs is None:
         _defs = []
@@ -460,12 +461,13 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
     # mask_groups: mask_layer_idx → [masked layer indices, front-to-back order]
     mask_groups = {}
     consumed    = set()
-    for i, layer in enumerate(all_layers):
-        ps = layer.get('parentLayerIndex')
-        if ps is not None:
-            pi = int(ps)
-            mask_groups.setdefault(pi, []).append(i)
-            consumed.add(i)
+    if masking:
+        for i, layer in enumerate(all_layers):
+            ps = layer.get('parentLayerIndex')
+            if ps is not None:
+                pi = int(ps)
+                mask_groups.setdefault(pi, []).append(i)
+                consumed.add(i)
 
     def _inst_lines(elem, white=False):
         child = elem.get('libraryItemName')
@@ -485,7 +487,7 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
         if white:
             cl = _render_sym_white(child, symbols, first, visited, _tx_scale)
         else:
-            cl, _ = _render_sym(child, symbols, first, visited, _defs, _grad_cache, _tx_scale)
+            cl, _ = _render_sym(child, symbols, first, visited, _defs, _grad_cache, _tx_scale, masking)
         if not cl:
             return []
         return ([f'<g transform="{xf}">'] if xf else ['<g>']) + cl + ['</g>']
@@ -540,7 +542,7 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
         if layer.get('visible') == 'false': continue
         if i in consumed: continue   # handled inside its mask group
 
-        if ltype == 'mask':
+        if masking and ltype == 'mask':
             # Build SVG <mask> from the mask layer geometry (all white).
             safe_name = name.replace('/', '_').replace('~', 'T').replace(' ', '_')
             mask_id = f'mask_{safe_name}_{i}'
@@ -701,9 +703,10 @@ def _bbox_sym(name, symbols, inst_frame=0, visited=None, mat=None, tx_scale=20.0
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def compose_to_svg(root_name, symbols, frame=0, out_path=None, tx_scale=20.0):
+def compose_to_svg(root_name, symbols, frame=0, out_path=None, tx_scale=20.0, masking=True):
     """Compose a symbol hierarchy into a single SVG with proper matrix transforms."""
-    print(f'Composing {root_name} at frame {frame} (tx_scale={tx_scale})...')
+    mask_note = '' if masking else ' [masking OFF]'
+    print(f'Composing {root_name} at frame {frame} (tx_scale={tx_scale}){mask_note}...')
 
     # First pass: tight world-space bounding box
     bbox = _bbox_sym(root_name, symbols, frame, tx_scale=tx_scale)
@@ -717,7 +720,7 @@ def compose_to_svg(root_name, symbols, frame=0, out_path=None, tx_scale=20.0):
         vx, vy, vw, vh = -2000, -2000, 4000, 4000
 
     # Second pass: generate SVG
-    body, defs = _render_sym(root_name, symbols, frame, _tx_scale=tx_scale)
+    body, defs = _render_sym(root_name, symbols, frame, _tx_scale=tx_scale, masking=masking)
     if not body:
         print('Nothing rendered.'); return
 
