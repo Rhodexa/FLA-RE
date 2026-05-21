@@ -390,6 +390,30 @@ def _get_fill_color(shape, idx, _defs=None, _grad_cache=None):
             return ('#88aaff' if grad_tag == 'LinearGradient' else '#ffaa88'), 1.0
     return '#888888', 1.0
 
+
+def _get_stroke_style(shape, idx):
+    """Return (color, alpha, weight_twips, linecap) for stroke style index idx.
+
+    Flash SolidStroke weight is in design pixels; multiply by 20 to convert to
+    twips for use in an SVG whose coordinate system is also in twips.
+    """
+    for ss in shape.iter(t('StrokeStyle')):
+        if ss.get('index') != str(idx):
+            continue
+        sol = ss.find(t('SolidStroke'))
+        if sol is None:
+            continue
+        weight = float(sol.get('weight', 2.0)) * 20.0
+        caps   = sol.get('caps', 'round')
+        if caps == 'none': caps = 'butt'
+        fc = sol.find(t('fill'))
+        if fc is not None:
+            sc = fc.find(t('SolidColor'))
+            if sc is not None:
+                return sc.get('color', '#000000'), float(sc.get('alpha', 1.0)), weight, caps
+    return '#000000', 1.0, 40.0, 'round'
+
+
 def _active_frame(layer, frame_num):
     """Return the DOMFrame active at frame_num in this layer, or None."""
     frames = layer.find(t('frames'))
@@ -403,19 +427,25 @@ def _active_frame(layer, frame_num):
     return None
 
 def _shape_svg(shape, _defs=None, _grad_cache=None):
-    """Render a DOMShape as filled SVG paths (one <path> per fill region).
+    """Render a DOMShape as filled + stroked SVG paths.
 
     Each Edge element is split into individual segments.  fillStyle0 edges are
-    added forward (fill is on the left of the direction); fillStyle1 edges are
-    reversed so their fill also ends up on the left.  Segments are then stitched
-    into closed contours by endpoint matching.
+    added forward; fillStyle1 edges are reversed (fill-on-right → fill-on-left).
+    strokeStyle edges are collected as-is (direction doesn't affect stroke appearance).
+    All segment groups are stitched into contours before rendering.
     """
-    fill_segs = {}   # fill_idx → list of segments
-    fill_meta = {}   # fill_idx → (color_or_url, alpha)
+    fill_segs   = {}   # fill_idx   → list of segments
+    fill_meta   = {}   # fill_idx   → (color_or_url, alpha)
+    stroke_segs = {}   # stroke_idx → list of segments
+    stroke_meta = {}   # stroke_idx → (color, alpha, weight_twips, linecap)
 
     for fs in shape.iter(t('FillStyle')):
         idx = int(fs.get('index', 0))
         fill_meta[idx] = _get_fill_color(shape, idx, _defs, _grad_cache)
+
+    for ss in shape.iter(t('StrokeStyle')):
+        idx = int(ss.get('index', 0))
+        stroke_meta[idx] = _get_stroke_style(shape, idx)
 
     for edge in shape.iter(t('Edge')):
         es = edge.get('edges', '').strip()
@@ -426,12 +456,17 @@ def _shape_svg(shape, _defs=None, _grad_cache=None):
         except Exception:
             continue
         segs = _split_segs(cmds)
+        if not segs:
+            continue
         f0s = edge.get('fillStyle0')
         f1s = edge.get('fillStyle1')
+        sss = edge.get('strokeStyle')
         if f0s:
             fill_segs.setdefault(int(f0s), []).extend(segs)
         if f1s:
             fill_segs.setdefault(int(f1s), []).extend([_reverse_seg(s) for s in segs])
+        if sss:
+            stroke_segs.setdefault(int(sss), []).extend(segs)
 
     lines = []
     for fi, segs in fill_segs.items():
@@ -442,6 +477,16 @@ def _shape_svg(shape, _defs=None, _grad_cache=None):
         opac = f' fill-opacity="{alpha:.2f}"' if alpha < 0.9999 else ''
         lines.append(
             f'<path d="{d}" fill="{color}" fill-rule="evenodd"{opac} stroke="none"/>'
+        )
+    for si, segs in stroke_segs.items():
+        color, alpha, weight, caps = stroke_meta.get(si, ('#000000', 1.0, 40.0, 'round'))
+        d = _segs_to_svg_d(segs)
+        if not d:
+            continue
+        opac = f' stroke-opacity="{alpha:.2f}"' if alpha < 0.9999 else ''
+        lines.append(
+            f'<path d="{d}" fill="none" stroke="{color}" stroke-width="{weight:.1f}"'
+            f' stroke-linecap="{caps}" stroke-linejoin="round"{opac}/>'
         )
     return lines
 
@@ -520,7 +565,6 @@ def _render_sym_white(name, symbols, inst_frame=0, visited=None, tx_scale=20.0):
     lines = []
     for layer in reversed(list(layers_e)):
         if layer.get('layerType') in ('guide', 'folder', 'mask'): continue
-        if layer.get('visible') == 'false': continue
         frame = _active_frame(layer, inst_frame)
         if frame is None: continue
         elements = frame.find(t('elements'))
@@ -591,8 +635,9 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
             ps = layer.get('parentLayerIndex')
             if ps is not None:
                 pi = int(ps)
-                mask_groups.setdefault(pi, []).append(i)
-                consumed.add(i)
+                if all_layers[pi].get('layerType') == 'mask':
+                    mask_groups.setdefault(pi, []).append(i)
+                    consumed.add(i)
 
     def _inst_lines(elem, white=False):
         child = elem.get('libraryItemName')
@@ -660,12 +705,26 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
                 out.extend(_inst_lines(elem, white=white))
         return out
 
+    def _layer_has_shapes(layer):
+        """True if the layer's frame 0 contains any DOMShape or DOMGroup directly.
+        Used to distinguish artwork layers from pure-instance animation layers
+        (sparkle comps etc.) when deciding whether to render invisible layers."""
+        frame = _active_frame(layer, inst_frame)
+        if frame is None: return False
+        elems = frame.find(t('elements'))
+        if elems is None: return False
+        return any(e.tag in (t('DOMShape'), t('DOMGroup')) for e in elems)
+
     body = []
     # Flash XML: first layer = topmost in UI. Reverse to draw back-to-front.
     for i, layer in reversed(list(enumerate(all_layers))):
         ltype = layer.get('layerType', 'normal')
         if ltype in ('guide', 'folder'): continue
-        if layer.get('visible') == 'false': continue
+        # Skip invisible layers that are pure-instance compositions (sparkle
+        # animations etc.).  Invisible layers with direct shapes are artwork
+        # that the author hid in the authoring view but intends to render.
+        if layer.get('visible') == 'false' and ltype != 'mask' and not _layer_has_shapes(layer):
+            continue
         if i in consumed: continue   # handled inside its mask group
 
         if masking and ltype == 'mask':
@@ -679,7 +738,6 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
             group_content = []
             for mi in reversed(mask_groups.get(i, [])):
                 ml = all_layers[mi]
-                if ml.get('visible') == 'false': continue
                 group_content.extend(_layer_lines(ml))
 
             if mask_shape and group_content:
