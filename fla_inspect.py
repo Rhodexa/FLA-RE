@@ -373,7 +373,7 @@ def _get_fill_color(shape, idx, _defs=None, _grad_cache=None):
         sc = fs.find(t('SolidColor'))
         if sc is not None:
             a = float(sc.get('alpha', 1.0))
-            c = sc.get('color', '#888888')
+            c = sc.get('color', '#000000')
             return c, a
         for grad_tag in ('LinearGradient', 'RadialGradient'):
             grad = fs.find(t(grad_tag))
@@ -388,7 +388,7 @@ def _get_fill_color(shape, idx, _defs=None, _grad_cache=None):
                 return f'url(#{_grad_cache[key]})', 1.0
             # Fallback placeholder when gradient decoding is not available
             return ('#88aaff' if grad_tag == 'LinearGradient' else '#ffaa88'), 1.0
-    return '#888888', 1.0
+    return '#000000', 1.0
 
 
 def _get_stroke_style(shape, idx):
@@ -470,7 +470,7 @@ def _shape_svg(shape, _defs=None, _grad_cache=None):
 
     lines = []
     for fi, segs in fill_segs.items():
-        color, alpha = fill_meta.get(fi, ('#888888', 1.0))
+        color, alpha = fill_meta.get(fi, ('#000000', 1.0))
         d = _segs_to_svg_d(segs)
         if not d:
             continue
@@ -729,6 +729,8 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
 
         if masking and ltype == 'mask':
             # Build SVG <mask> from the mask layer geometry (all white).
+            # mask-type:alpha means only the opacity of the mask shapes matters —
+            # the white fill colour is ignored and does not bleed into the content.
             safe_name = name.replace('/', '_').replace('~', 'T').replace(' ', '_')
             mask_id = f'mask_{safe_name}_{i}'
 
