@@ -415,7 +415,8 @@ def _render_sym_white(name, symbols, inst_frame=0, visited=None, tx_scale=20.0):
                 if m is not None:
                     a=float(m.get('a',1)); b=float(m.get('b',0))
                     c=float(m.get('c',0)); d=float(m.get('d',1))
-                    tx=float(m.get('tx',0)) * tx_scale; ty=float(m.get('ty',0)) * tx_scale
+                    eff_scale = 1.0 if _sym_local_y_min(child, symbols) > _PREPOS_Y_THRESHOLD else tx_scale
+                    tx=float(m.get('tx',0)) * eff_scale; ty=float(m.get('ty',0)) * eff_scale
                     xf = f'matrix({a},{b},{c},{d},{tx},{ty})'
                 else:
                     xf = None
@@ -479,8 +480,9 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
         if m is not None:
             a=float(m.get('a',1)); b=float(m.get('b',0))
             c=float(m.get('c',0)); d=float(m.get('d',1))
-            tx=float(m.get('tx',0)) * _tx_scale
-            ty=float(m.get('ty',0)) * _tx_scale
+            eff_scale = 1.0 if _sym_local_y_min(child, symbols) > _PREPOS_Y_THRESHOLD else _tx_scale
+            tx=float(m.get('tx',0)) * eff_scale
+            ty=float(m.get('ty',0)) * eff_scale
             xf = f'matrix({a},{b},{c},{d},{tx},{ty})'
         else:
             xf = None
@@ -573,6 +575,42 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
             body.extend(_layer_lines(layer))
 
     return body, _defs
+
+# ── Pre-positioned geometry detection ────────────────────────────────────────
+
+_prepos_cache = {}   # symbol_name → minimum local Y across direct shapes
+
+def _sym_local_y_min(name, symbols):
+    """Min Y of fill-edge geometry in a symbol's own direct shapes (frame 0, no recursion).
+    Used to detect pre-positioned symbols whose geometry already lives in world coordinates.
+    Result is cached per symbol name."""
+    if name in _prepos_cache:
+        return _prepos_cache[name]
+    sym = symbols.get(name)
+    if sym is None:
+        _prepos_cache[name] = 0.0
+        return 0.0
+    tl = sym.find(t('timeline'))
+    dom_tl = tl.find(t('DOMTimeline')) if tl else None
+    layers_e = dom_tl.find(t('layers')) if dom_tl else None
+    min_y = float('inf')
+    if layers_e is not None:
+        for layer in layers_e:
+            if layer.get('layerType') in ('guide', 'folder'): continue
+            frame = _active_frame(layer, 0)
+            if frame is None: continue
+            for shape in frame.iter(t('DOMShape')):
+                for _, ly in _collect_shape_pts(shape):
+                    if ly < min_y:
+                        min_y = ly
+    result = min_y if min_y != float('inf') else 0.0
+    _prepos_cache[name] = result
+    return result
+
+# Symbols whose local min-Y exceeds this are pre-positioned in stage/world coords.
+# Their instance matrix tx/ty is already in full-scale units — do NOT apply tx_scale.
+_PREPOS_Y_THRESHOLD = 1500.0
+
 
 # ── Bounding box helpers ──────────────────────────────────────────────────────
 
@@ -683,10 +721,11 @@ def _bbox_sym(name, symbols, inst_frame=0, visited=None, mat=None, tx_scale=20.0
                 _mc = elem.find(t('matrix'))
                 m   = _mc.find(t('Matrix')) if _mc is not None else None
                 if m is not None:
+                    eff_scale = 1.0 if _sym_local_y_min(child, symbols) > _PREPOS_Y_THRESHOLD else tx_scale
                     child_mat = (
                         float(m.get('a',  1)), float(m.get('b',  0)),
                         float(m.get('c',  0)), float(m.get('d',  1)),
-                        float(m.get('tx', 0)) * tx_scale, float(m.get('ty', 0)) * tx_scale,
+                        float(m.get('tx', 0)) * eff_scale, float(m.get('ty', 0)) * eff_scale,
                     )
                 else:
                     child_mat = _IDENTITY_MAT
