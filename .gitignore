@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Logs / scratch output
+output.txt
+*.log
+
+# Graphics — none tracked
+*.svg
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+output/
+*_parts/
+*_ref/
+
+# Flash / Animate source files — none tracked
+*.fla
+*.xfl
+fla/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Windows noise
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS noise
+.DS_Store
