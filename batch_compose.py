@@ -27,6 +27,6 @@ for fla_path in sorted(fla_dir.glob('*.fla')):
         root = char_roots[0]
         safe = fla_path.stem.replace(' ', '_')
         out  = out_dir / f'{safe}_composed.svg'
-        compose_to_svg(root, symbols, frame=0, out_path=str(out), masking=False)
+        compose_to_svg(root, symbols, frame=0, out_path=str(out), masking=True)
     except Exception as e:
         print(f'[ERROR] {fla_path.name}: {e}')

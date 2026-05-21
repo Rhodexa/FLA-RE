@@ -216,6 +216,115 @@ def cmds_to_svg_d(cmds):
             cx, cy = c[3], c[4]   # anchor is the new current point
     return ' '.join(parts)
 
+def _split_segs(cmds):
+    """Split a flat command list into segments; each starts with exactly one M."""
+    segs = []
+    cur = []
+    for c in cmds:
+        if c[0] == 'M':
+            if cur:
+                segs.append(cur)
+            cur = [c]
+        else:
+            cur.append(c)
+    if cur:
+        segs.append(cur)
+    return [s for s in segs if len(s) > 1]  # drop bare M with no geometry
+
+
+def _seg_startpoint(seg):
+    return seg[0][1], seg[0][2]
+
+
+def _seg_endpoint(seg):
+    c = seg[-1]
+    if c[0] == 'L': return c[1], c[2]
+    if c[0] == 'Q': return c[3], c[4]
+    return c[1], c[2]
+
+
+def _reverse_seg(seg):
+    """Reverse a path segment — turns a fillStyle1 (fill-right) edge into fill-left."""
+    if not seg or len(seg) < 2:
+        return seg
+    cx, cy = seg[0][1], seg[0][2]
+    annotated = []
+    for c in seg[1:]:
+        if c[0] == 'L':
+            annotated.append((cx, cy, c))
+            cx, cy = c[1], c[2]
+        elif c[0] == 'Q':
+            annotated.append((cx, cy, c))
+            cx, cy = c[3], c[4]
+    result = [('M', cx, cy)]
+    for sx, sy, c in reversed(annotated):
+        if c[0] == 'L':
+            result.append(('L', sx, sy))
+        elif c[0] == 'Q':
+            result.append(('Q', c[1], c[2], sx, sy))  # control point stays
+    return result
+
+
+def _segs_to_svg_d(segs, eps=1.0):
+    """Chain segments into closed contours and return an SVG d string.
+
+    Segments are linked by matching endpoints within eps twips.
+    Each closed contour gets a trailing Z.  Open chains are emitted as-is.
+    """
+    if not segs:
+        return ''
+
+    def rk(x, y):
+        return (round(x / eps), round(y / eps))
+
+    # Build start-point index: rounded key -> list of seg indices
+    start_idx: dict = {}
+    for i, seg in enumerate(segs):
+        k = rk(*_seg_startpoint(seg))
+        start_idx.setdefault(k, []).append(i)
+
+    visited: set = set()
+    parts_all = []
+
+    for seed in range(len(segs)):
+        if seed in visited:
+            continue
+        chain = [seed]
+        visited.add(seed)
+
+        while True:
+            ex, ey = _seg_endpoint(segs[chain[-1]])
+            sx0, sy0 = _seg_startpoint(segs[chain[0]])
+            if len(chain) > 1 and abs(ex - sx0) < eps and abs(ey - sy0) < eps:
+                break  # closed loop
+            cands = [i for i in start_idx.get(rk(ex, ey), []) if i not in visited]
+            if not cands:
+                break
+            nxt = cands[0]
+            visited.add(nxt)
+            chain.append(nxt)
+
+        ex, ey = _seg_endpoint(segs[chain[-1]])
+        sx0, sy0 = _seg_startpoint(segs[chain[0]])
+        closed = abs(ex - sx0) < eps and abs(ey - sy0) < eps
+
+        parts = []
+        for k, si in enumerate(chain):
+            seg = segs[si]
+            if k == 0:
+                parts.append(f'M{seg[0][1]:.2f} {seg[0][2]:.2f}')
+            for c in seg[1:]:
+                if c[0] == 'L':
+                    parts.append(f'L{c[1]:.2f} {c[2]:.2f}')
+                elif c[0] == 'Q':
+                    parts.append(f'Q{c[1]:.2f} {c[2]:.2f} {c[3]:.2f} {c[4]:.2f}')
+        if closed:
+            parts.append('Z')
+        parts_all.append(' '.join(parts))
+
+    return ' '.join(parts_all)
+
+
 def _gradient_to_svg(grad_elem, grad_tag, grad_id):
     """Build SVG <linearGradient> or <radialGradient> lines from XFL element.
 
@@ -295,12 +404,13 @@ def _active_frame(layer, frame_num):
 
 def _shape_svg(shape, _defs=None, _grad_cache=None):
     """Render a DOMShape as filled SVG paths (one <path> per fill region).
-    All edges for a fill are merged into one command list so that M-dedup
-    in cmds_to_svg_d can stitch adjacent curves into continuous paths.
 
-    _defs / _grad_cache: shared lists/dicts for gradient def accumulation.
+    Each Edge element is split into individual segments.  fillStyle0 edges are
+    added forward (fill is on the left of the direction); fillStyle1 edges are
+    reversed so their fill also ends up on the left.  Segments are then stitched
+    into closed contours by endpoint matching.
     """
-    fill_cmds = {}   # fill_idx → flat list of path commands
+    fill_segs = {}   # fill_idx → list of segments
     fill_meta = {}   # fill_idx → (color_or_url, alpha)
 
     for fs in shape.iter(t('FillStyle')):
@@ -315,15 +425,20 @@ def _shape_svg(shape, _defs=None, _grad_cache=None):
             cmds = parse_edge_str(es)
         except Exception:
             continue
+        segs = _split_segs(cmds)
         f0s = edge.get('fillStyle0')
         f1s = edge.get('fillStyle1')
-        if f0s: fill_cmds.setdefault(int(f0s), []).extend(cmds)
-        if f1s: fill_cmds.setdefault(int(f1s), []).extend(cmds)
+        if f0s:
+            fill_segs.setdefault(int(f0s), []).extend(segs)
+        if f1s:
+            fill_segs.setdefault(int(f1s), []).extend([_reverse_seg(s) for s in segs])
 
     lines = []
-    for fi, cmds in fill_cmds.items():
+    for fi, segs in fill_segs.items():
         color, alpha = fill_meta.get(fi, ('#888888', 1.0))
-        d = cmds_to_svg_d(cmds)
+        d = _segs_to_svg_d(segs)
+        if not d:
+            continue
         opac = f' fill-opacity="{alpha:.2f}"' if alpha < 0.9999 else ''
         lines.append(
             f'<path d="{d}" fill="{color}" fill-rule="evenodd"{opac} stroke="none"/>'
@@ -332,7 +447,7 @@ def _shape_svg(shape, _defs=None, _grad_cache=None):
 
 def _shape_svg_white(shape):
     """Like _shape_svg but renders ALL fills as white (for SVG <mask> use)."""
-    all_cmds = []
+    all_segs = []
     for edge in shape.iter(t('Edge')):
         es = edge.get('edges', '').strip()
         if not es:
@@ -341,11 +456,20 @@ def _shape_svg_white(shape):
             cmds = parse_edge_str(es)
         except Exception:
             continue
-        if edge.get('fillStyle0') or edge.get('fillStyle1'):
-            all_cmds.extend(cmds)
-    if not all_cmds:
+        f0s = edge.get('fillStyle0')
+        f1s = edge.get('fillStyle1')
+        if not f0s and not f1s:
+            continue
+        segs = _split_segs(cmds)
+        if f0s:
+            all_segs.extend(segs)
+        if f1s:
+            all_segs.extend([_reverse_seg(s) for s in segs])
+    if not all_segs:
         return []
-    d = cmds_to_svg_d(all_cmds)
+    d = _segs_to_svg_d(all_segs)
+    if not d:
+        return []
     return [f'<path d="{d}" fill="white" fill-rule="evenodd" stroke="none"/>']
 
 
