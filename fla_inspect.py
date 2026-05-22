@@ -283,12 +283,22 @@ def _segs_to_svg_d(segs, eps=0.05):
 
     Segments are linked by matching endpoints within eps twips.
     Each closed contour gets a trailing Z.  Open chains are emitted as-is.
+
+    Two-phase approach:
+      Phase 1 — greedy chaining via startpoint index (fast, handles most shapes).
+      Phase 2 — merge any leftover open chains that connect end-to-end, using a
+                 slightly relaxed epsilon.  This fixes cases where a degenerate
+                 micro-segment (Flash gap-patch) gets visited first and steals a
+                 connection point that the main outline needs to close itself.
     """
     if not segs:
         return ''
 
     def rk(x, y):
         return (round(x / eps), round(y / eps))
+
+    def close_ok(ex, ey, sx, sy, e):
+        return abs(ex - sx) <= e and abs(ey - sy) <= e
 
     # Build start-point index: rounded key -> list of seg indices
     start_idx: dict = {}
@@ -297,8 +307,9 @@ def _segs_to_svg_d(segs, eps=0.05):
         start_idx.setdefault(k, []).append(i)
 
     visited: set = set()
-    parts_all = []
+    chains = []   # list of [seg_index, ...]
 
+    # ── Phase 1: greedy chaining ─────────────────────────────────────────────
     for seed in range(len(segs)):
         if seed in visited:
             continue
@@ -308,7 +319,7 @@ def _segs_to_svg_d(segs, eps=0.05):
         while True:
             ex, ey = _seg_endpoint(segs[chain[-1]])
             sx0, sy0 = _seg_startpoint(segs[chain[0]])
-            if len(chain) > 1 and abs(ex - sx0) < eps and abs(ey - sy0) < eps:
+            if len(chain) > 1 and close_ok(ex, ey, sx0, sy0, eps):
                 break  # closed loop
             cands = [i for i in start_idx.get(rk(ex, ey), []) if i not in visited]
             if not cands:
@@ -317,9 +328,53 @@ def _segs_to_svg_d(segs, eps=0.05):
             visited.add(nxt)
             chain.append(nxt)
 
-        ex, ey = _seg_endpoint(segs[chain[-1]])
-        sx0, sy0 = _seg_startpoint(segs[chain[0]])
-        closed = abs(ex - sx0) < eps and abs(ey - sy0) < eps
+        chains.append(chain)
+
+    # ── Phase 2: merge open chains ───────────────────────────────────────────
+    # A degenerate micro-segment can get visited early and steal a connection
+    # point, leaving the real outline as several open fragments.  Stitch those
+    # fragments together using a 2× epsilon so tiny gaps (exactly == eps) close.
+    merge_eps = eps * 2.0
+
+    def chain_end(ch):
+        return _seg_endpoint(segs[ch[-1]])
+
+    def chain_start(ch):
+        return _seg_startpoint(segs[ch[0]])
+
+    # Repeat until no more merges are possible.
+    for _ in range(len(chains)):
+        # Find the first open chain whose endpoint matches another open chain's start.
+        merged = False
+        open_idx = [i for i, ch in enumerate(chains) if ch]   # non-empty
+        for i in open_idx:
+            chi = chains[i]
+            ei = chain_end(chi)
+            ex_closed = close_ok(*ei, *chain_start(chi), merge_eps)
+            if ex_closed:
+                continue  # already effectively closed, leave it
+            for j in open_idx:
+                if j == i:
+                    continue
+                chj = chains[j]
+                if close_ok(*ei, *chain_start(chj), merge_eps):
+                    chains[i] = chi + chj
+                    chains[j] = []          # consumed
+                    merged = True
+                    break
+            if merged:
+                break
+        if not merged:
+            break
+
+    # ── Emit ─────────────────────────────────────────────────────────────────
+    parts_all = []
+    for chain in chains:
+        if not chain:
+            continue
+        ex, ey = chain_end(chain)
+        sx0, sy0 = chain_start(chain)
+        closed = close_ok(ex, ey, sx0, sy0, merge_eps)
 
         parts = []
         for k, si in enumerate(chain):
