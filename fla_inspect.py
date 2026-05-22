@@ -171,6 +171,19 @@ def decode_hex(tok):
         v -= 0x1000000
     return v + int(fh, 16) / 256.0
 
+def safe_name(s: str) -> str:
+    return s.replace('/', '_').replace('~', '').replace('(', '').replace(')', '')
+
+def read_matrix(mc) -> tuple:
+    """Read (a,b,c,d,tx,ty) from a Flash <matrix><Matrix .../></matrix> wrapper.
+    Returns identity (1,0,0,1,0,0) if the wrapper or Matrix child is absent."""
+    m = mc.find(t('Matrix')) if mc is not None else None
+    if m is None:
+        return (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+    return (float(m.get('a', 1)), float(m.get('b', 0)),
+            float(m.get('c', 0)), float(m.get('d', 1)),
+            float(m.get('tx', 0)), float(m.get('ty', 0)))
+
 def parse_edge_str(s):
     """Flash edge string → list of ('M'|'L'|'Q', ...) tuples."""
     tokens = _TOK.findall(s)
@@ -180,7 +193,7 @@ def parse_edge_str(s):
     def num():
         nonlocal i
         tok = tokens[i]; i += 1
-        return decode_hex(tok) if tok.startswith('#') else float(tok)
+        return (decode_hex(tok) if tok.startswith('#') else float(tok)) / 20.0
 
     while i < len(tokens):
         tok = tokens[i]; i += 1
@@ -199,7 +212,7 @@ def cmds_to_svg_d(cmds):
     """
     parts = []
     cx = cy = None
-    eps = 0.3   # tolerance for "same point" in Flash's coordinate units
+    eps = 0.015
 
     for c in cmds:
         if c[0] == 'M':
@@ -265,7 +278,7 @@ def _reverse_seg(seg):
     return result
 
 
-def _segs_to_svg_d(segs, eps=1.0):
+def _segs_to_svg_d(segs, eps=0.05):
     """Chain segments into closed contours and return an SVG d string.
 
     Segments are linked by matching endpoints within eps twips.
@@ -332,14 +345,8 @@ def _gradient_to_svg(grad_elem, grad_tag, grad_id):
     radial has center (0,0) radius=16384.  The XFL Matrix maps gradient space
     → shape's local coordinate space, so we use gradientTransform.
     """
-    mc = grad_elem.find(t('matrix'))
-    m  = mc.find(t('Matrix')) if mc is not None else None
-    xf_attr = ''
-    if m is not None:
-        a = float(m.get('a', 1)); b = float(m.get('b', 0))
-        c = float(m.get('c', 0)); d = float(m.get('d', 1))
-        tx = float(m.get('tx', 0)); ty = float(m.get('ty', 0))
-        xf_attr = f' gradientTransform="matrix({a},{b},{c},{d},{tx},{ty})"'
+    a, b, c, d, tx, ty = read_matrix(grad_elem.find(t('matrix')))
+    xf_attr = f' gradientTransform="matrix({a},{b},{c},{d},{tx},{ty})"'
 
     stops = []
     for entry in grad_elem.findall(t('GradientEntry')):
@@ -351,11 +358,11 @@ def _gradient_to_svg(grad_elem, grad_tag, grad_id):
 
     if grad_tag == 'LinearGradient':
         head = (f'<linearGradient id="{grad_id}" gradientUnits="userSpaceOnUse"'
-                f' x1="-16384" y1="0" x2="16384" y2="0"{xf_attr}>')
+                f' x1="-819.2" y1="0" x2="819.2" y2="0"{xf_attr}>')
         tail = '</linearGradient>'
     else:
         head = (f'<radialGradient id="{grad_id}" gradientUnits="userSpaceOnUse"'
-                f' cx="0" cy="0" r="16384" fx="0" fy="0"{xf_attr}>')
+                f' cx="0" cy="0" r="819.2" fx="0" fy="0"{xf_attr}>')
         tail = '</radialGradient>'
 
     return [head] + [f'  {s}' for s in stops] + [tail]
@@ -392,18 +399,14 @@ def _get_fill_color(shape, idx, _defs=None, _grad_cache=None):
 
 
 def _get_stroke_style(shape, idx):
-    """Return (color, alpha, weight_twips, linecap) for stroke style index idx.
-
-    Flash SolidStroke weight is in design pixels; multiply by 20 to convert to
-    twips for use in an SVG whose coordinate system is also in twips.
-    """
+    """Return (color, alpha, weight_px, linecap) for stroke style index idx."""
     for ss in shape.iter(t('StrokeStyle')):
         if ss.get('index') != str(idx):
             continue
         sol = ss.find(t('SolidStroke'))
         if sol is None:
             continue
-        weight = float(sol.get('weight', 2.0)) * 20.0
+        weight = float(sol.get('weight', 2.0))
         caps   = sol.get('caps', 'round')
         if caps == 'none': caps = 'butt'
         fc = sol.find(t('fill'))
@@ -411,7 +414,7 @@ def _get_stroke_style(shape, idx):
             sc = fc.find(t('SolidColor'))
             if sc is not None:
                 return sc.get('color', '#000000'), float(sc.get('alpha', 1.0)), weight, caps
-    return '#000000', 1.0, 40.0, 'round'
+    return '#000000', 1.0, 2.0, 'round'
 
 
 def _active_frame(layer, frame_num):
@@ -523,15 +526,8 @@ def _iter_group_shapes_white(group_elem):
     members = group_elem.find(t('members'))
     if members is None:
         return
-    mc = group_elem.find(t('matrix'))
-    m  = mc.find(t('Matrix')) if mc is not None else None
-    xf = None
-    if m is not None:
-        a=float(m.get('a',1)); b=float(m.get('b',0))
-        c=float(m.get('c',0)); d=float(m.get('d',1))
-        tx=float(m.get('tx',0)); ty=float(m.get('ty',0))
-        if not (a==1 and b==0 and c==0 and d==1 and tx==0 and ty==0):
-            xf = f'matrix({a},{b},{c},{d},{tx},{ty})'
+    a, b, c, d, tx, ty = read_matrix(group_elem.find(t('matrix')))
+    xf = None if (a,b,c,d,tx,ty) == (1.0,0.0,0.0,1.0,0.0,0.0) else f'matrix({a},{b},{c},{d},{tx},{ty})'
     inner = []
     for child in list(members):
         if child.tag == t('DOMShape'):
@@ -547,7 +543,7 @@ def _iter_group_shapes_white(group_elem):
             yield from inner
 
 
-def _render_sym_white(name, symbols, inst_frame=0, visited=None, tx_scale=20.0):
+def _render_sym_white(name, symbols, inst_frame=0, visited=None):
     """Render a symbol entirely as white fills — used to build SVG mask shapes."""
     if visited is None:
         visited = set()
@@ -578,17 +574,9 @@ def _render_sym_white(name, symbols, inst_frame=0, visited=None, tx_scale=20.0):
                 child = elem.get('libraryItemName')
                 if not child or child in visited: continue
                 first = int(elem.get('firstFrame', 0))
-                _mc = elem.find(t('matrix'))
-                m = _mc.find(t('Matrix')) if _mc is not None else None
-                if m is not None:
-                    a=float(m.get('a',1)); b=float(m.get('b',0))
-                    c=float(m.get('c',0)); d=float(m.get('d',1))
-                    eff_scale = 1.0 if _sym_local_y_min(child, symbols) > _PREPOS_Y_THRESHOLD else tx_scale
-                    tx=float(m.get('tx',0)) * eff_scale; ty=float(m.get('ty',0)) * eff_scale
-                    xf = f'matrix({a},{b},{c},{d},{tx},{ty})'
-                else:
-                    xf = None
-                child_lines = _render_sym_white(child, symbols, first, visited, tx_scale)
+                a, b, c, d, tx, ty = read_matrix(elem.find(t('matrix')))
+                xf = f'matrix({a},{b},{c},{d},{tx},{ty})'
+                child_lines = _render_sym_white(child, symbols, first, visited)
                 if child_lines:
                     lines.append(f'<g transform="{xf}">' if xf else '<g>')
                     lines.extend(child_lines)
@@ -596,7 +584,7 @@ def _render_sym_white(name, symbols, inst_frame=0, visited=None, tx_scale=20.0):
     return lines
 
 
-def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cache=None, _tx_scale=1.0, masking=True):
+def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cache=None, masking=True):
     """Recursively render a symbol and its children as SVG lines.
 
     Returns (body_lines, defs_lines).  defs_lines accumulates SVG <mask> and
@@ -644,38 +632,22 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
         if not child or child in visited:
             return []
         first = int(elem.get('firstFrame', 0))
-        _mc = elem.find(t('matrix'))
-        m   = _mc.find(t('Matrix')) if _mc is not None else None
-        if m is not None:
-            a=float(m.get('a',1)); b=float(m.get('b',0))
-            c=float(m.get('c',0)); d=float(m.get('d',1))
-            eff_scale = 1.0 if _sym_local_y_min(child, symbols) > _PREPOS_Y_THRESHOLD else _tx_scale
-            tx=float(m.get('tx',0)) * eff_scale
-            ty=float(m.get('ty',0)) * eff_scale
-            xf = f'matrix({a},{b},{c},{d},{tx},{ty})'
-        else:
-            xf = None
+        a, b, c, d, tx, ty = read_matrix(elem.find(t('matrix')))
+        xf = f'matrix({a},{b},{c},{d},{tx},{ty})'
         if white:
-            cl = _render_sym_white(child, symbols, first, visited, _tx_scale)
+            cl = _render_sym_white(child, symbols, first, visited)
         else:
-            cl, _ = _render_sym(child, symbols, first, visited, _defs, _grad_cache, _tx_scale, masking)
+            cl, _ = _render_sym(child, symbols, first, visited, _defs, _grad_cache, masking)
         if not cl:
             return []
-        return ([f'<g transform="{xf}">'] if xf else ['<g>']) + cl + ['</g>']
+        return [f'<g transform="{xf}">'] + cl + ['</g>']
 
     def _group_lines(group_elem, white=False):
         members = group_elem.find(t('members'))
         if members is None:
             return []
-        mc = group_elem.find(t('matrix'))
-        m  = mc.find(t('Matrix')) if mc is not None else None
-        xf = None
-        if m is not None:
-            a=float(m.get('a',1)); b=float(m.get('b',0))
-            c=float(m.get('c',0)); d=float(m.get('d',1))
-            tx=float(m.get('tx',0)); ty=float(m.get('ty',0))
-            if not (a==1 and b==0 and c==0 and d==1 and tx==0 and ty==0):
-                xf = f'matrix({a},{b},{c},{d},{tx},{ty})'
+        a, b, c, d, tx, ty = read_matrix(group_elem.find(t('matrix')))
+        xf = None if (a,b,c,d,tx,ty) == (1.0,0.0,0.0,1.0,0.0,0.0) else f'matrix({a},{b},{c},{d},{tx},{ty})'
         inner = []
         for child in list(members):
             if child.tag == t('DOMShape'):
@@ -705,25 +677,12 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
                 out.extend(_inst_lines(elem, white=white))
         return out
 
-    def _layer_has_shapes(layer):
-        """True if the layer's frame 0 contains any DOMShape or DOMGroup directly.
-        Used to distinguish artwork layers from pure-instance animation layers
-        (sparkle comps etc.) when deciding whether to render invisible layers."""
-        frame = _active_frame(layer, inst_frame)
-        if frame is None: return False
-        elems = frame.find(t('elements'))
-        if elems is None: return False
-        return any(e.tag in (t('DOMShape'), t('DOMGroup')) for e in elems)
-
     body = []
     # Flash XML: first layer = topmost in UI. Reverse to draw back-to-front.
     for i, layer in reversed(list(enumerate(all_layers))):
         ltype = layer.get('layerType', 'normal')
         if ltype in ('guide', 'folder'): continue
-        # Skip invisible layers that are pure-instance compositions (sparkle
-        # animations etc.).  Invisible layers with direct shapes are artwork
-        # that the author hid in the authoring view but intends to render.
-        if layer.get('visible') == 'false' and ltype != 'mask' and not _layer_has_shapes(layer):
+        if layer.get('visible') == 'false' and ltype != 'mask':
             continue
         if i in consumed: continue   # handled inside its mask group
 
@@ -731,8 +690,7 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
             # Build SVG <mask> from the mask layer geometry (all white).
             # mask-type:alpha means only the opacity of the mask shapes matters —
             # the white fill colour is ignored and does not bleed into the content.
-            safe_name = name.replace('/', '_').replace('~', 'T').replace(' ', '_')
-            mask_id = f'mask_{safe_name}_{i}'
+            mask_id = f'mask_{safe_name(name)}_{i}'
 
             mask_shape = _layer_lines(layer, white=True)
 
@@ -745,7 +703,7 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
             if mask_shape and group_content:
                 _defs += [
                     f'<mask id="{mask_id}" maskUnits="userSpaceOnUse"'
-                    f' x="-9999" y="-9999" width="99999" height="99999">',
+                    f' x="-500" y="-500" width="5000" height="5000">',
                     *mask_shape,
                     '</mask>'
                 ]
@@ -759,42 +717,6 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
             body.extend(_layer_lines(layer))
 
     return body, _defs
-
-# ── Pre-positioned geometry detection ────────────────────────────────────────
-
-_prepos_cache = {}   # symbol_name → minimum local Y across direct shapes
-
-def _sym_local_y_min(name, symbols):
-    """Min Y of fill-edge geometry in a symbol's own direct shapes (frame 0, no recursion).
-    Used to detect pre-positioned symbols whose geometry already lives in world coordinates.
-    Result is cached per symbol name."""
-    if name in _prepos_cache:
-        return _prepos_cache[name]
-    sym = symbols.get(name)
-    if sym is None:
-        _prepos_cache[name] = 0.0
-        return 0.0
-    tl = sym.find(t('timeline'))
-    dom_tl = tl.find(t('DOMTimeline')) if tl else None
-    layers_e = dom_tl.find(t('layers')) if dom_tl else None
-    min_y = float('inf')
-    if layers_e is not None:
-        for layer in layers_e:
-            if layer.get('layerType') in ('guide', 'folder'): continue
-            frame = _active_frame(layer, 0)
-            if frame is None: continue
-            for shape in frame.iter(t('DOMShape')):
-                for _, ly in _collect_shape_pts(shape):
-                    if ly < min_y:
-                        min_y = ly
-    result = min_y if min_y != float('inf') else 0.0
-    _prepos_cache[name] = result
-    return result
-
-# Symbols whose local min-Y exceeds this are pre-positioned in stage/world coords.
-# Their instance matrix tx/ty is already in full-scale units — do NOT apply tx_scale.
-_PREPOS_Y_THRESHOLD = 1500.0
-
 
 # ── Bounding box helpers ──────────────────────────────────────────────────────
 
@@ -814,32 +736,6 @@ def _apply_mat(mat, x, y):
     """Apply affine transform to a point."""
     a, b, c, d, tx, ty = mat
     return a*x + c*y + tx, b*x + d*y + ty
-
-_STRAY_THRESHOLD = 5000.0   # twips (250 px); shape entirely beyond this in BOTH axes → stray
-
-def _shape_is_stray(shape):
-    """True if all fill-edge geometry in this shape is far from origin in both X and Y.
-    Catches accidentally-left stage-reference art (e.g. RY_TailBit_7's ghost shape)."""
-    xs, ys = [], []
-    for edge in shape.iter(t('Edge')):
-        if not edge.get('fillStyle0') and not edge.get('fillStyle1'):
-            continue
-        es = edge.get('edges', '').strip()
-        if not es:
-            continue
-        try:
-            cmds = parse_edge_str(es)
-        except Exception:
-            continue
-        for c in cmds:
-            if c[0] == 'M':  xs.append(c[1]); ys.append(c[2])
-            elif c[0] == 'L': xs.append(c[1]); ys.append(c[2])
-            elif c[0] == 'Q': xs += [c[1], c[3]]; ys += [c[2], c[4]]
-    if not xs:
-        return False
-    return (min(abs(x) for x in xs) > _STRAY_THRESHOLD and
-            min(abs(y) for y in ys) > _STRAY_THRESHOLD)
-
 
 def _collect_shape_pts(shape):
     """Fill-edge geometry points in a DOMShape (local space, untransformed).
@@ -865,17 +761,7 @@ def _collect_shape_pts(shape):
 def _collect_group_pts(group_elem, mat):
     """Recursively collect world-space points from all DOMShapes inside a DOMGroup."""
     pts = []
-    mc = group_elem.find(t('matrix'))
-    m  = mc.find(t('Matrix')) if mc is not None else None
-    if m is not None:
-        local_mat = (
-            float(m.get('a', 1)), float(m.get('b', 0)),
-            float(m.get('c', 0)), float(m.get('d', 1)),
-            float(m.get('tx', 0)), float(m.get('ty', 0)),
-        )
-        effective = _compose_mat(mat, local_mat)
-    else:
-        effective = mat
+    effective = _compose_mat(mat, read_matrix(group_elem.find(t('matrix'))))
     members = group_elem.find(t('members'))
     if members is None:
         return pts
@@ -888,7 +774,7 @@ def _collect_group_pts(group_elem, mat):
     return pts
 
 
-def _bbox_sym(name, symbols, inst_frame=0, visited=None, mat=None, tx_scale=20.0):
+def _bbox_sym(name, symbols, inst_frame=0, visited=None, mat=None):
     """World-space AABB for a symbol hierarchy.  Returns (xmin,ymin,xmax,ymax) or None."""
     if visited is None: visited = set()
     if mat is None:     mat     = _IDENTITY_MAT
@@ -928,19 +814,8 @@ def _bbox_sym(name, symbols, inst_frame=0, visited=None, mat=None, tx_scale=20.0
                 if not child or child in visited: continue
                 first = int(elem.get('firstFrame', 0))
 
-                _mc = elem.find(t('matrix'))
-                m   = _mc.find(t('Matrix')) if _mc is not None else None
-                if m is not None:
-                    eff_scale = 1.0 if _sym_local_y_min(child, symbols) > _PREPOS_Y_THRESHOLD else tx_scale
-                    child_mat = (
-                        float(m.get('a',  1)), float(m.get('b',  0)),
-                        float(m.get('c',  0)), float(m.get('d',  1)),
-                        float(m.get('tx', 0)) * eff_scale, float(m.get('ty', 0)) * eff_scale,
-                    )
-                else:
-                    child_mat = _IDENTITY_MAT
-
-                result = _bbox_sym(child, symbols, first, visited, _compose_mat(mat, child_mat), tx_scale)
+                child_mat = read_matrix(elem.find(t('matrix')))
+                result = _bbox_sym(child, symbols, first, visited, _compose_mat(mat, child_mat))
                 if result:
                     xmin, ymin, xmax, ymax = result
                     all_pts += [(xmin, ymin), (xmax, ymax)]   # already world-space
@@ -952,13 +827,13 @@ def _bbox_sym(name, symbols, inst_frame=0, visited=None, mat=None, tx_scale=20.0
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def compose_to_svg(root_name, symbols, frame=0, out_path=None, tx_scale=20.0, masking=True):
+def compose_to_svg(root_name, symbols, frame=0, out_path=None, masking=True):
     """Compose a symbol hierarchy into a single SVG with proper matrix transforms."""
     mask_note = '' if masking else ' [masking OFF]'
-    print(f'Composing {root_name} at frame {frame} (tx_scale={tx_scale}){mask_note}...')
+    print(f'Composing {root_name} at frame {frame}{mask_note}...')
 
     # First pass: tight world-space bounding box
-    bbox = _bbox_sym(root_name, symbols, frame, tx_scale=tx_scale)
+    bbox = _bbox_sym(root_name, symbols, frame)
     if bbox:
         pad = 80
         xmin, ymin, xmax, ymax = bbox
@@ -969,7 +844,7 @@ def compose_to_svg(root_name, symbols, frame=0, out_path=None, tx_scale=20.0, ma
         vx, vy, vw, vh = -2000, -2000, 4000, 4000
 
     # Second pass: generate SVG
-    body, defs = _render_sym(root_name, symbols, frame, _tx_scale=tx_scale, masking=masking)
+    body, defs = _render_sym(root_name, symbols, frame, masking=masking)
     if not body:
         print('Nothing rendered.'); return
 
@@ -985,8 +860,7 @@ def compose_to_svg(root_name, symbols, frame=0, out_path=None, tx_scale=20.0, ma
         lines.append('  </defs>')
     lines += ['  ' + l for l in body] + ['</svg>']
 
-    safe = root_name.replace('/', '_').replace('~', '').replace('(', '').replace(')', '')
-    dest = Path(out_path) if out_path else Path(safe + '_composed.svg')
+    dest = Path(out_path) if out_path else Path(safe_name(root_name) + '_composed.svg')
     dest.write_text('\n'.join(lines), encoding='utf-8')
     print(f'Written: {dest}  ({len(body)} SVG lines, viewBox {vx:.0f} {vy:.0f} {vw:.0f}x{vh:.0f})')
 
@@ -1000,8 +874,7 @@ def export_all_symbols(symbols, outdir):
         has_edges = any(True for _ in sym.iter(t('Edge')))
         if not has_edges:
             continue
-        safe = name.replace('/', '_').replace('~', '').replace('(', '').replace(')', '')
-        out  = d / (safe + '.svg')
+        out  = d / (safe_name(name) + '.svg')
         symbol_to_svg(name, symbols, str(out))
         count += 1
     print(f'\nExported {count} symbols to {d}/')
@@ -1061,8 +934,7 @@ def symbol_to_svg(name, symbols, out_path=None):
         lines.append(f'  <path d="{d}" fill="none" stroke="{color}" stroke-width="4" opacity="{alpha:.2f}"/>')
     lines.append('</svg>')
 
-    safe  = name.replace('/', '_').replace('~', '').replace('(', '').replace(')', '')
-    dest  = Path(out_path) if out_path else Path(safe + '.svg')
+    dest  = Path(out_path) if out_path else Path(safe_name(name) + '.svg')
     dest.write_text('\n'.join(lines), encoding='utf-8')
     print(f'Written: {dest}   ({len(paths)} paths, {vw:.0f}x{vh:.0f} units)')
 

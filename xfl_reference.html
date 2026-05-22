@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>XFL/FLA Structure Reference — for Rhode</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f1117;
+  --bg2: #181c27;
+  --bg3: #1e2333;
+  --border: #2a3050;
+  --accent: #7c9ef8;
+  --accent2: #f778a1;
+  --accent3: #69d4c8;
+  --accent4: #e5a945;
+  --accent5: #b085f5;
+  --text: #c8d0ea;
+  --text-dim: #6b7599;
+  --text-bright: #eef1ff;
+  --green: #57c989;
+  --red: #f76060;
+  --yellow: #f0c060;
+  --tag: #5a85d6;
+  --attr: #69d4c8;
+  --val: #e5a945;
+  --comment: #4c5a7a;
+  --code-bg: #141724;
+  --sidebar-w: 240px;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── SIDEBAR ── */
+#sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  overflow-y: auto;
+  z-index: 100;
+  padding-bottom: 2rem;
+}
+#sidebar-header {
+  padding: 1.2rem 1rem .8rem;
+  border-bottom: 1px solid var(--border);
+}
+#sidebar-header h1 {
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+#sidebar-header p {
+  font-size: .72rem;
+  color: var(--text-dim);
+  margin-top: .2rem;
+}
+#sidebar nav { padding: .5rem 0; }
+.nav-section { margin-top: .3rem; }
+.nav-section-label {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--text-dim);
+  padding: .4rem 1rem .2rem;
+}
+#sidebar nav a {
+  display: block;
+  padding: .32rem 1rem .32rem 1.3rem;
+  font-size: .8rem;
+  color: var(--text-dim);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all .15s;
+}
+#sidebar nav a:hover, #sidebar nav a.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: rgba(124,158,248,.07);
+}
+#sidebar nav a.bug { color: var(--red); }
+#sidebar nav a.bug:hover { border-left-color: var(--red); background: rgba(247,96,96,.07); }
+
+/* ── MAIN ── */
+main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 900px;
+  padding: 2rem 2.5rem 4rem;
+}
+
+h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin: 2.5rem 0 .6rem;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid var(--border);
+}
+h2:first-child { margin-top: 0; }
+h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 1.5rem 0 .4rem;
+}
+h4 {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--accent3);
+  margin: 1.1rem 0 .3rem;
+}
+p { margin-bottom: .7rem; color: var(--text); }
+ul, ol { padding-left: 1.4rem; margin-bottom: .7rem; }
+li { margin-bottom: .25rem; }
+strong { color: var(--text-bright); font-weight: 600; }
+em { color: var(--yellow); font-style: normal; font-weight: 500; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── BADGES / CALLOUTS ── */
+.badge {
+  display: inline-block;
+  padding: .05rem .45rem;
+  border-radius: 4px;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  vertical-align: middle;
+}
+.badge-bug  { background: rgba(247,96,96,.18); color: var(--red); }
+.badge-tip  { background: rgba(87,201,137,.15); color: var(--green); }
+.badge-warn { background: rgba(240,192,96,.15); color: var(--yellow); }
+.badge-unit { background: rgba(124,158,248,.15); color: var(--accent); }
+
+.callout {
+  border-radius: 6px;
+  padding: .75rem 1rem;
+  margin: .9rem 0;
+  font-size: .88rem;
+  border-left: 3px solid;
+}
+.callout-bug  { background: rgba(247,96,96,.08); border-color: var(--red); }
+.callout-tip  { background: rgba(87,201,137,.08); border-color: var(--green); }
+.callout-warn { background: rgba(240,192,96,.08); border-color: var(--yellow); }
+.callout-info { background: rgba(124,158,248,.08); border-color: var(--accent); }
+.callout p:last-child { margin-bottom: 0; }
+.callout strong { color: inherit; }
+
+/* ── CODE / XML ── */
+code {
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: .82em;
+  background: var(--code-bg);
+  padding: .1em .35em;
+  border-radius: 3px;
+  color: var(--accent3);
+}
+pre {
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: .8rem;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem 1.2rem;
+  overflow-x: auto;
+  line-height: 1.55;
+  margin: .8rem 0;
+  tab-size: 2;
+  white-space: pre;
+}
+.xml-tag   { color: var(--tag); }
+.xml-attr  { color: var(--attr); }
+.xml-val   { color: var(--val); }
+.xml-comment { color: var(--comment); font-style: italic; }
+.xml-bracket { color: var(--text-dim); }
+.xml-ns    { color: #4a6090; }
+.hl        { background: rgba(124,158,248,.15); border-radius: 2px; padding: 0 1px; }
+.hl-green  { background: rgba(87,201,137,.15); }
+.hl-red    { background: rgba(247,96,96,.15); }
+.hl-yellow { background: rgba(240,192,96,.15); }
+.hl-purple { background: rgba(176,133,245,.15); }
+
+/* annotation lines */
+.ann-block { display: flex; gap: .8rem; margin: .3rem 0; }
+.ann-line  { flex: 1; font-family: monospace; font-size: .8rem; }
+.ann-text  { font-size: .78rem; color: var(--text-dim); padding-top: .1rem; }
+.ann-text strong { color: var(--accent); font-weight: 600; }
+
+/* ── TABLES ── */
+table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .85rem; }
+th {
+  background: var(--bg3);
+  color: var(--text-bright);
+  text-align: left;
+  padding: .5rem .75rem;
+  font-weight: 600;
+  font-size: .78rem;
+  letter-spacing: .03em;
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: .45rem .75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+td code { font-size: .78em; }
+td:first-child { white-space: nowrap; }
+
+/* ── COLLAPSIBLE ── */
+details {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: .8rem 0;
+  background: var(--bg2);
+}
+details summary {
+  cursor: pointer;
+  padding: .65rem 1rem;
+  font-weight: 600;
+  font-size: .85rem;
+  color: var(--text-bright);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  user-select: none;
+}
+details summary::before {
+  content: '▶';
+  font-size: .65rem;
+  color: var(--text-dim);
+  transition: transform .15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details summary:hover { color: var(--accent); }
+details > *:not(summary) { padding: 0 1rem 1rem; }
+details > pre { margin: 0 1rem 1rem; }
+
+/* ── EDGE DECODER ── */
+#decoder {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.2rem;
+  margin: 1rem 0;
+}
+#decoder textarea {
+  width: 100%;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-family: 'Cascadia Code','Fira Code',monospace;
+  font-size: .8rem;
+  padding: .6rem .8rem;
+  resize: vertical;
+  min-height: 70px;
+  outline: none;
+  transition: border-color .15s;
+}
+#decoder textarea:focus { border-color: var(--accent); }
+#decoder button {
+  margin-top: .5rem;
+  background: var(--accent);
+  color: #0f1117;
+  border: none;
+  border-radius: 5px;
+  padding: .4rem 1rem;
+  font-size: .82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+#decoder button:hover { opacity: .85; }
+#decoder-out {
+  margin-top: .8rem;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: .7rem .9rem;
+  font-family: monospace;
+  font-size: .8rem;
+  min-height: 60px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.dec-M  { color: var(--accent2); }
+.dec-L  { color: var(--accent3); }
+.dec-Q  { color: var(--accent5); }
+.dec-px { color: var(--text-dim); font-size: .72em; }
+
+/* ── SECTION IDs ── */
+section { scroll-margin-top: 1.5rem; }
+
+/* ── MATRIX DIAGRAM ── */
+.matrix-grid {
+  display: inline-grid;
+  grid-template-columns: repeat(3, auto);
+  gap: 2px 8px;
+  font-family: monospace;
+  font-size: .9rem;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .8rem 1.2rem;
+  margin: .5rem 0;
+  line-height: 2;
+}
+.mat-bracket { color: var(--text-dim); grid-column: span 3; text-align: center; }
+.mat-a { color: var(--green); }
+.mat-b { color: var(--accent2); }
+.mat-c { color: var(--accent2); }
+.mat-d { color: var(--green); }
+.mat-tx { color: var(--accent); }
+.mat-ty { color: var(--accent); }
+.mat-label { font-size: .7rem; color: var(--text-dim); text-align: center; }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* utility */
+.dimmed { color: var(--text-dim); }
+.mono { font-family: monospace; }
+hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h1>XFL / FLA Reference</h1>
+    <p>For Rhode — parse by eye, find bugs</p>
+  </div>
+  <nav>
+    <div class="nav-section">
+      <div class="nav-section-label">Structure</div>
+      <a href="#overview">What is an FLA?</a>
+      <a href="#zip">ZIP Layout</a>
+      <a href="#domdoc">DOMDocument.xml</a>
+      <a href="#symbols">LIBRARY/*.xml</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Timeline</div>
+      <a href="#timeline">Timeline → Layers</a>
+      <a href="#frames">DOMFrame (keyframes)</a>
+      <a href="#elements">Frame Elements</a>
+      <a href="#instance">DOMSymbolInstance</a>
+      <a href="#matrix">Matrix & Twips</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Shapes</div>
+      <a href="#domshape">DOMShape</a>
+      <a href="#fillstyle">FillStyle</a>
+      <a href="#strokestyle">StrokeStyle</a>
+      <a href="#edgestring">Edge String</a>
+      <a href="#fillsides">Fill Sides (0 vs 1)</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Advanced</div>
+      <a href="#layers">Layer Types & Masks</a>
+      <a href="#color">Color Transforms</a>
+      <a href="#gradients">Gradients</a>
+      <a href="#decoder-section">⚡ Edge Decoder</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Bugs</div>
+      <a href="#bugs" class="bug">⚠ Known Parser Bugs</a>
+    </div>
+  </nav>
+</div>
+
+<main>
+
+<!-- ════════════════════════════════════ OVERVIEW ══ -->
+<section id="overview">
+<h2>What is an FLA?</h2>
+
+<p>An FLA file (Adobe Animate / Flash CS5+) is <strong>just a ZIP file</strong> with a different extension. Rename <code>foo.fla</code> to <code>foo.zip</code> and open it — you'll see XML everywhere.</p>
+
+<div class="callout callout-warn">
+  <p><strong>Old vs new:</strong> Pre-CS5 FLAs use a proprietary binary format (magic bytes <code>D0 CF 11 E0</code> — that's a compound document / OLE2 container). Only CS5+ FLAs are ZIP-based and parseable as XML. The inspector checks <code>magic[:2] == b'PK'</code> to detect ZIP.</p>
+</div>
+
+<p>Inside the ZIP you'll find two kinds of files:</p>
+<ul>
+  <li><strong>DOMDocument.xml</strong> — one file, the stage settings + master symbol list</li>
+  <li><strong>LIBRARY/SymbolName.xml</strong> — one file per library symbol, containing all its art</li>
+</ul>
+
+<p>Everything is in the <strong>XFL namespace</strong>: <code>http://ns.adobe.com/xfl/2008/</code>. Every tag you'll encounter is prefixed with that URI in the parsed tree, which is why the inspector wraps lookups with <code>t('TagName')</code> → <code>{http://ns.adobe.com/xfl/2008/}TagName</code>.</p>
+
+<details>
+<summary>Other files in the ZIP (skip these)</summary>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>mimetype</code></td><td>Literal string "application/vnd.adobe.fla" — not XML</td></tr>
+  <tr><td><code>META-INF/metadata.xml</code></td><td>Usually empty in our FLAs</td></tr>
+  <tr><td><code>PublishSettings.xml</code></td><td>Export/publish configuration (target SWF version etc.)</td></tr>
+  <tr><td><code>MobileSettings.xml</code></td><td>Mobile publish settings</td></tr>
+  <tr><td><code>bin/*.dat</code></td><td>Embedded bitmap data (not XML, skip)</td></tr>
+  <tr><td><code>bin/SymDepend.cache</code></td><td>Flash internal dependency cache</td></tr>
+  <tr><td><code>*.xfl</code></td><td>Tiny stub with just the XFL version number</td></tr>
+</table>
+</details>
+</section>
+
+<!-- ════════════════════════════════════ ZIP LAYOUT ══ -->
+<section id="zip">
+<h2>ZIP Layout</h2>
+
+<pre><span class="xml-comment">stk_c01_twilight_sparkle.fla (rename to .zip → extract)</span>
+<span class="xml-attr">├─</span> <span class="hl">DOMDocument.xml</span>             <span class="xml-comment">← master file, parse this first</span>
+<span class="xml-attr">├─</span> LIBRARY/
+<span class="xml-attr">│   ├─</span> <span class="hl">~TS_Character.xml</span>         <span class="xml-comment">← one symbol per file</span>
+<span class="xml-attr">│   ├─</span> <span class="hl">~TS_Head.xml</span>
+<span class="xml-attr">│   ├─</span> TS_Iris.xml
+<span class="xml-attr">│   ├─</span> TS_IrisWedges.xml
+<span class="xml-attr">│   ├─</span> STOCK .fla stuff/
+<span class="xml-attr">│   │   └─</span> STOCK_BG_1.xml         <span class="xml-comment">← subfolders allowed in LIBRARY</span>
+<span class="xml-attr">│   └─</span> ...
+<span class="xml-attr">├─</span> bin/
+<span class="xml-attr">│   └─</span> Media 34.dat               <span class="xml-comment">← embedded bitmap, binary</span>
+<span class="xml-attr">└─</span> mimetype, PublishSettings.xml, ...</pre>
+
+<p>The inspector's <code>get_symbols()</code> reads every <code>LIBRARY/*.xml</code> (recursing into subfolders) and builds a dict keyed by the symbol's <strong>name attribute</strong>, not the filename. The name inside the XML is canonical.</p>
+</section>
+
+<!-- ════════════════════════════════════ DOMDOCUMENT ══ -->
+<section id="domdoc">
+<h2>DOMDocument.xml</h2>
+
+<p>The root element is <code>&lt;DOMDocument&gt;</code>. Its attributes tell you the global stage properties:</p>
+
+<pre><span class="xml-tag">&lt;DOMDocument</span>
+  <span class="xml-attr">xmlns</span>=<span class="xml-val">"http://ns.adobe.com/xfl/2008/"</span>
+  <span class="xml-attr">width</span>=<span class="xml-val">"864"</span>           <span class="xml-comment">← stage width in pixels</span>
+  <span class="xml-attr">height</span>=<span class="xml-val">"486"</span>          <span class="xml-comment">← stage height in pixels</span>
+  <span class="xml-attr">frameRate</span>=<span class="xml-val">"2"</span>        <span class="xml-comment">← fps (2 = "on twos", 24fps animation)</span>
+  <span class="xml-attr">creatorInfo</span>=<span class="xml-val">"Adobe Flash Professional CC"</span>
+  <span class="xml-attr">versionInfo</span>=<span class="xml-val">"Saved by Adobe Flash Windows 14.2 build 20"</span>
+  <span class="xml-attr">xflVersion</span>=<span class="xml-val">"2.5"</span><span class="xml-tag">&gt;</span>
+
+  <span class="xml-tag">&lt;folders&gt;</span>
+    <span class="xml-tag">&lt;DOMFolderItem</span> <span class="xml-attr">name</span>=<span class="xml-val">"STOCK .fla stuff"</span> <span class="xml-attr">itemID</span>=<span class="xml-val">"4b5a..."</span><span class="xml-tag">/&gt;</span>
+  <span class="xml-tag">&lt;/folders&gt;</span>
+
+  <span class="xml-tag">&lt;media&gt;</span>
+    <span class="xml-tag">&lt;DOMBitmapItem</span>             <span class="xml-comment">← embedded image, references bin/*.dat</span>
+      <span class="xml-attr">name</span>=<span class="xml-val">"STOCK .fla stuff/STOCK_bg1"</span>
+      <span class="xml-attr">href</span>=<span class="xml-val">"STOCK .fla stuff/STOCK_bg1.png"</span>
+      <span class="xml-attr">bitmapDataHRef</span>=<span class="xml-val">"Media 34.dat"</span><span class="xml-tag">/&gt;</span>
+  <span class="xml-tag">&lt;/media&gt;</span>
+
+  <span class="xml-tag">&lt;symbols&gt;</span>                    <span class="xml-comment">← manifest: lists every library symbol</span>
+    <span class="xml-tag">&lt;Include</span>
+      <span class="xml-attr">href</span>=<span class="xml-val">"~TS_Character.xml"</span>  <span class="xml-comment">← relative path inside LIBRARY/</span>
+      <span class="xml-attr">itemID</span>=<span class="xml-val">"58bf0560-00000085"</span>
+      <span class="xml-attr">lastModified</span>=<span class="xml-val">"1488913760"</span><span class="xml-tag">/&gt;</span>
+    <span class="xml-tag">&lt;Include</span> <span class="xml-attr">href</span>=<span class="xml-val">"TS_Iris.xml"</span> <span class="xml-attr">...</span><span class="xml-tag">/&gt;</span>
+    ...
+  <span class="xml-tag">&lt;/symbols&gt;</span>
+
+  <span class="xml-tag">&lt;timelines&gt;</span>                 <span class="xml-comment">← the main stage timeline (Scenes)</span>
+    <span class="xml-tag">&lt;DOMTimeline</span> <span class="xml-attr">name</span>=<span class="xml-val">"Scene 1"</span><span class="xml-tag">&gt;</span>
+      ...                        <span class="xml-comment">← same structure as symbols (see below)</span>
+    <span class="xml-tag">&lt;/DOMTimeline&gt;</span>
+  <span class="xml-tag">&lt;/timelines&gt;</span>
+
+<span class="xml-tag">&lt;/DOMDocument&gt;</span></pre>
+
+<p>The inspector only uses the <code>&lt;symbols&gt;</code> section as a sanity check; it reads the actual symbol data directly from the LIBRARY XML files.</p>
+</section>
+
+<!-- ════════════════════════════════════ SYMBOLS ══ -->
+<section id="symbols">
+<h2>LIBRARY/*.xml — Symbol Files</h2>
+
+<p>Each symbol is stored as its own XML file. The root element is always <code>&lt;DOMSymbolItem&gt;</code>:</p>
+
+<pre><span class="xml-tag">&lt;DOMSymbolItem</span>
+  <span class="xml-attr">xmlns</span>=<span class="xml-val">"http://ns.adobe.com/xfl/2008/"</span>
+  <span class="xml-attr">name</span>=<span class="xml-val">"TS_Iris"</span>              <span class="xml-comment">← this is the canonical key! used in libraryItemName refs</span>
+  <span class="xml-attr">itemID</span>=<span class="xml-val">"58bf0560-000000a8"</span>    <span class="xml-comment">← Flash's internal GUID (ignore)</span>
+  <span class="xml-attr">symbolType</span>=<span class="xml-val">"graphic"</span>        <span class="xml-comment">← "graphic", "movieclip", or "button"</span>
+  <span class="xml-attr">lastModified</span>=<span class="xml-val">"1488913760"</span><span class="xml-tag">&gt;</span>  <span class="xml-comment">← Unix timestamp</span>
+
+  <span class="xml-tag">&lt;timeline&gt;</span>
+    <span class="xml-tag">&lt;DOMTimeline</span> <span class="xml-attr">name</span>=<span class="xml-val">"TS_Iris"</span><span class="xml-tag">&gt;</span>
+      <span class="xml-tag">&lt;layers&gt;</span>
+        ...
+      <span class="xml-tag">&lt;/layers&gt;</span>
+    <span class="xml-tag">&lt;/DOMTimeline&gt;</span>
+  <span class="xml-tag">&lt;/timeline&gt;</span>
+
+<span class="xml-tag">&lt;/DOMSymbolItem&gt;</span></pre>
+
+<table>
+  <tr><th>symbolType</th><th>Meaning</th></tr>
+  <tr><td><code>graphic</code></td><td>Simple graphic. Playback is controlled by the parent (firstFrame, loop). Most symbols in these FLAs.</td></tr>
+  <tr><td><code>movieclip</code></td><td>Independent timeline, plays on its own regardless of parent frame.</td></tr>
+  <tr><td><code>button</code></td><td>4-frame timeline (Up/Over/Down/Hit). Rare in animation FLAs.</td></tr>
+</table>
+
+<div class="callout callout-info">
+  <p>The inspector's <code>get_symbols()</code> keys the dict by the <code>name</code> attribute, not the filename. When a <code>DOMSymbolInstance</code> says <code>libraryItemName="TS_Iris"</code>, that's the string you look up in this dict.</p>
+</div>
+</section>
+
+<!-- ════════════════════════════════════ TIMELINE ══ -->
+<section id="timeline">
+<h2>Timeline → Layers</h2>
+
+<p>Inside every symbol (and on the stage) there is one <code>&lt;DOMTimeline&gt;</code>. It contains a flat list of <code>&lt;DOMLayer&gt;</code> elements:</p>
+
+<pre><span class="xml-tag">&lt;DOMTimeline</span> <span class="xml-attr">name</span>=<span class="xml-val">"~TS_Head"</span><span class="xml-tag">&gt;</span>
+  <span class="xml-tag">&lt;layers&gt;</span>
+    <span class="xml-comment">&lt;!-- [0] guide layer — not rendered --&gt;</span>
+    <span class="xml-tag">&lt;DOMLayer</span>
+      <span class="xml-attr">name</span>=<span class="xml-val">"AUDIO"</span>
+      <span class="xml-attr">layerType</span>=<span class="xml-val">"guide"</span>
+      <span class="xml-attr">visible</span>=<span class="xml-val">"false"</span><span class="xml-tag">&gt;</span>...<span class="xml-tag">&lt;/DOMLayer&gt;</span>
+
+    <span class="xml-comment">&lt;!-- [20] mask layer — clips layers below it that have parentLayerIndex="20" --&gt;</span>
+    <span class="xml-tag">&lt;DOMLayer</span>
+      <span class="xml-attr">name</span>=<span class="xml-val">"EYE mask"</span>
+      <span class="xml-attr">layerType</span>=<span class="xml-val">"mask"</span><span class="xml-tag">&gt;</span>...<span class="xml-tag">&lt;/DOMLayer&gt;</span>
+
+    <span class="xml-comment">&lt;!-- [21] normal layer — masked by layer [20] --&gt;</span>
+    <span class="xml-tag">&lt;DOMLayer</span>
+      <span class="xml-attr">name</span>=<span class="xml-val">"HIGHLIGHTS"</span>
+      <span class="xml-attr">parentLayerIndex</span>=<span class="xml-val">"20"</span><span class="xml-tag">&gt;</span>...<span class="xml-tag">&lt;/DOMLayer&gt;</span>
+
+    <span class="xml-comment">&lt;!-- [22] another normal layer — also masked by [20] --&gt;</span>
+    <span class="xml-tag">&lt;DOMLayer</span>
+      <span class="xml-attr">name</span>=<span class="xml-val">"IRIS"</span>
+      <span class="xml-attr">parentLayerIndex</span>=<span class="xml-val">"20"</span><span class="xml-tag">&gt;</span>...<span class="xml-tag">&lt;/DOMLayer&gt;</span>
+
+    <span class="xml-comment">&lt;!-- regular layer, no masking --&gt;</span>
+    <span class="xml-tag">&lt;DOMLayer</span> <span class="xml-attr">name</span>=<span class="xml-val">"SKULL"</span><span class="xml-tag">&gt;</span>...<span class="xml-tag">&lt;/DOMLayer&gt;</span>
+  <span class="xml-tag">&lt;/layers&gt;</span>
+<span class="xml-tag">&lt;/DOMTimeline&gt;</span></pre>
+
+<h3>Layer stacking order</h3>
+<p>The <strong>first</strong> layer in the XML list is the <strong>topmost</strong> layer in Flash's layer panel (rendered last = on top). The last layer in the list is at the back. The inspector reverses the list to draw back-to-front.</p>
+
+<h3>Layer attributes</h3>
+<table>
+  <tr><th>Attribute</th><th>Values / Meaning</th></tr>
+  <tr><td><code>name</code></td><td>Display name (not unique, just a label)</td></tr>
+  <tr><td><code>layerType</code></td><td><code>normal</code> (default, omitted), <code>guide</code>, <code>folder</code>, <code>mask</code></td></tr>
+  <tr><td><code>visible</code></td><td><code>"false"</code> = hidden in Flash UI. The inspector skips these (except mask layers).</td></tr>
+  <tr><td><code>parentLayerIndex</code></td><td>Integer index into the layers list. Present on masked layers, points to their mask layer. Absent on normal layers.</td></tr>
+  <tr><td><code>color</code></td><td>Color swatch shown in Flash's timeline UI — ignore for rendering.</td></tr>
+</table>
+</section>
+
+<!-- ════════════════════════════════════ FRAMES ══ -->
+<section id="frames">
+<h2>DOMFrame — Keyframes</h2>
+
+<p>Each layer has a <code>&lt;frames&gt;</code> block containing a list of <code>&lt;DOMFrame&gt;</code> elements. These are <strong>keyframes</strong>. Flash's frame model:</p>
+
+<ul>
+  <li>A keyframe starts at <em>index</em> and lasts for <em>duration</em> frames</li>
+  <li>Frame numbers 0, 1, 2, ... index into this span</li>
+  <li>If you want frame <em>N</em>, find the keyframe where <code>index ≤ N &lt; index + duration</code></li>
+</ul>
+
+<pre><span class="xml-tag">&lt;frames&gt;</span>
+  <span class="xml-tag">&lt;DOMFrame</span> <span class="xml-attr">index</span>=<span class="xml-val">"0"</span> <span class="xml-attr">duration</span>=<span class="xml-val">"100"</span> <span class="xml-attr">keyMode</span>=<span class="xml-val">"9728"</span><span class="xml-tag">&gt;</span>
+    <span class="xml-tag">&lt;elements/&gt;</span>            <span class="xml-comment">← empty frame (100 frames of nothing)</span>
+  <span class="xml-tag">&lt;/DOMFrame&gt;</span>
+
+  <span class="xml-tag">&lt;DOMFrame</span> <span class="xml-attr">index</span>=<span class="xml-val">"100"</span> <span class="xml-attr">duration</span>=<span class="xml-val">"32"</span>
+            <span class="xml-attr">name</span>=<span class="xml-val">"Rotation"</span> <span class="xml-attr">labelType</span>=<span class="xml-val">"comment"</span><span class="xml-tag">&gt;</span>
+    <span class="xml-comment">&lt;!-- name="Rotation" is a frame LABEL (or comment) --&gt;</span>
+    <span class="xml-tag">&lt;elements&gt;</span>
+      ...
+    <span class="xml-tag">&lt;/elements&gt;</span>
+  <span class="xml-tag">&lt;/DOMFrame&gt;</span>
+
+  <span class="xml-comment">&lt;!-- last frame — duration omitted! (see bug section) --&gt;</span>
+  <span class="xml-tag">&lt;DOMFrame</span> <span class="xml-attr">index</span>=<span class="xml-val">"132"</span><span class="xml-tag">&gt;</span>
+    <span class="xml-tag">&lt;elements&gt;</span>...<span class="xml-tag">&lt;/elements&gt;</span>
+  <span class="xml-tag">&lt;/DOMFrame&gt;</span>
+<span class="xml-tag">&lt;/frames&gt;</span></pre>
+
+<h3>DOMFrame attributes</h3>
+<table>
+  <tr><th>Attribute</th><th>Meaning</th></tr>
+  <tr><td><code>index</code></td><td>0-based start frame number. Always present.</td></tr>
+  <tr><td><code>duration</code></td><td>How many frames this keyframe covers. <strong>Omitted on the last keyframe</strong> — treat as 1 (or extend to infinity; see bugs).</td></tr>
+  <tr><td><code>name</code></td><td>Frame label or comment text. Optional.</td></tr>
+  <tr><td><code>labelType</code></td><td><code>"name"</code> (default), <code>"comment"</code>, <code>"anchor"</code></td></tr>
+  <tr><td><code>tweenType</code></td><td><code>"motion"</code>, <code>"shape"</code>, or absent (keyframe). The inspector doesn't use tweens.</td></tr>
+  <tr><td><code>keyMode</code></td><td>Internal Flash hint. Ignore.</td></tr>
+</table>
+
+<div class="callout callout-warn">
+  <p><strong>Finding the active frame for frame N:</strong> The inspector's <code>_active_frame(layer, N)</code> scans all DOMFrames and returns the one whose <code>index ≤ N &lt; index + duration</code>. If no frame matches (frame N is past all keyframes), it returns <code>None</code>. This silently skips symbols placed on the very last keyframe when exporting anything other than frame 0.</p>
+</div>
+</section>
+
+<!-- ════════════════════════════════════ ELEMENTS ══ -->
+<section id="elements">
+<h2>Frame Elements</h2>
+
+<p>Inside <code>&lt;elements&gt;</code> you'll find a mix of these element types:</p>
+
+<table>
+  <tr><th>Tag</th><th>What it is</th></tr>
+  <tr><td><code>DOMSymbolInstance</code></td><td>A placed instance of a library symbol</td></tr>
+  <tr><td><code>DOMShape</code></td><td>Raw vector art (fills + strokes + edges)</td></tr>
+  <tr><td><code>DOMGroup</code></td><td>A group of shapes/instances with a shared transform</td></tr>
+  <tr><td><code>DOMBitmapInstance</code></td><td>A placed bitmap. Inspector doesn't render these.</td></tr>
+  <tr><td><code>DOMText</code></td><td>A text block. Inspector doesn't render these.</td></tr>
+</table>
+
+<p>Elements within the same <code>&lt;elements&gt;</code> are ordered <strong>bottom-to-top</strong> (last element in the list is on top visually).</p>
+
+<h3>DOMGroup</h3>
+<p>A group adds an extra transform level. Its children live inside <code>&lt;members&gt;</code>:</p>
+
+<pre><span class="xml-tag">&lt;DOMGroup&gt;</span>
+  <span class="xml-tag">&lt;matrix&gt;</span>
+    <span class="xml-tag">&lt;Matrix</span> <span class="xml-attr">a</span>=<span class="xml-val">"1"</span> <span class="xml-attr">b</span>=<span class="xml-val">"0"</span> <span class="xml-attr">c</span>=<span class="xml-val">"0"</span> <span class="xml-attr">d</span>=<span class="xml-val">"1"</span> <span class="xml-attr">tx</span>=<span class="xml-val">"15"</span> <span class="xml-attr">ty</span>=<span class="xml-val">"-8"</span><span class="xml-tag">/&gt;</span>
+  <span class="xml-tag">&lt;/matrix&gt;</span>
+  <span class="xml-tag">&lt;members&gt;</span>
+    <span class="xml-comment">&lt;!-- DOMShape, DOMGroup, DOMSymbolInstance ... --&gt;</span>
+  <span class="xml-tag">&lt;/members&gt;</span>
+<span class="xml-tag">&lt;/DOMGroup&gt;</span></pre>
+</section>
+
+<!-- ════════════════════════════════════ INSTANCE ══ -->
+<section id="instance">
+<h2>DOMSymbolInstance — Placing a Symbol</h2>
+
+<p>This is the most common element. It places one symbol from the library onto the stage or into another symbol.</p>
+
+<pre><span class="xml-tag">&lt;DOMSymbolInstance</span>
+  <span class="xml-attr">libraryItemName</span>=<span class="xml-val">"TS_IrisWedges"</span>    <span class="xml-comment">← key into symbols dict</span>
+  <span class="xml-attr">symbolType</span>=<span class="xml-val">"graphic"</span>
+  <span class="xml-attr">loop</span>=<span class="xml-val">"loop"</span>                       <span class="xml-comment">← playback mode</span>
+  <span class="xml-attr">firstFrame</span>=<span class="xml-val">"0"</span><span class="xml-tag">&gt;</span>                  <span class="xml-comment">← which frame of the symbol to show</span>
+
+  <span class="xml-tag">&lt;matrix&gt;</span>
+    <span class="xml-tag">&lt;Matrix</span>
+      <span class="xml-attr">a</span>=<span class="xml-val">"-0.999984741210938"</span>         <span class="xml-comment">← scale X (with rotation)</span>
+      <span class="xml-attr">b</span>=<span class="xml-val">"0"</span>                          <span class="xml-comment">← shear Y</span>
+      <span class="xml-attr">c</span>=<span class="xml-val">"-0.0987548828125"</span>           <span class="xml-comment">← shear X</span>
+      <span class="xml-attr">d</span>=<span class="xml-val">"0.999969482421875"</span>          <span class="xml-comment">← scale Y (with rotation)</span>
+      <span class="xml-attr">tx</span>=<span class="xml-val">"17.45"</span>                     <span class="xml-comment">← translation X in PIXELS</span>
+      <span class="xml-attr">ty</span>=<span class="xml-val">"11"</span><span class="xml-tag">/&gt;</span>                      <span class="xml-comment">← translation Y in PIXELS</span>
+  <span class="xml-tag">&lt;/matrix&gt;</span>
+
+  <span class="xml-tag">&lt;transformationPoint&gt;</span>
+    <span class="xml-tag">&lt;Point/&gt;</span>                        <span class="xml-comment">← pivot/registration point (usually origin)</span>
+  <span class="xml-tag">&lt;/transformationPoint&gt;</span>
+
+  <span class="xml-tag">&lt;color&gt;</span>                          <span class="xml-comment">← optional: color/alpha transform</span>
+    <span class="xml-tag">&lt;Color</span> <span class="xml-attr">alphaMultiplier</span>=<span class="xml-val">"0.5"</span><span class="xml-tag">/&gt;</span>
+  <span class="xml-tag">&lt;/color&gt;</span>
+
+<span class="xml-tag">&lt;/DOMSymbolInstance&gt;</span></pre>
+
+<h3>loop attribute</h3>
+<table>
+  <tr><th>Value</th><th>Meaning</th></tr>
+  <tr><td><code>loop</code></td><td>Play the symbol's timeline in a loop, synchronized with parent</td></tr>
+  <tr><td><code>playOnce</code></td><td>Play once, then hold on the last frame</td></tr>
+  <tr><td><code>singleFrame</code></td><td>Hold on a single frame. <code>firstFrame</code> says which one.</td></tr>
+</table>
+
+<div class="callout callout-info">
+  <p>For the parser, <code>firstFrame</code> is the most important attribute — it tells you which frame of the child symbol to render. The inspector passes it as <code>inst_frame</code> when recursing into the child.</p>
+</div>
+</section>
+
+<!-- ════════════════════════════════════ MATRIX ══ -->
+<section id="matrix">
+<h2>Matrix Transforms &amp; Twips</h2>
+
+<h3>The 6-component affine matrix</h3>
+
+<p>Flash uses a standard 2D affine transform stored as 6 components:</p>
+
+<div class="matrix-grid">
+  <span class="mat-a">a</span> <span class="mat-c">c</span> <span class="mat-tx">tx</span>
+  <span class="mat-b">b</span> <span class="mat-d">d</span> <span class="mat-ty">ty</span>
+  <span class="mat-label">scaleX/rot</span> <span class="mat-label">shear/rot</span> <span class="mat-label">translate</span>
+</div>
+
+<p>Applied to a point <code>(x, y)</code>:</p>
+<pre>x' = <span class="mat-a">a</span>·x + <span class="mat-c">c</span>·y + <span class="mat-tx">tx</span>
+y' = <span class="mat-b">b</span>·x + <span class="mat-d">d</span>·y + <span class="mat-ty">ty</span></pre>
+
+<p>The identity matrix is <code>a=1, b=0, c=0, d=1, tx=0, ty=0</code>. When a <code>&lt;Matrix&gt;</code> element only has <code>tx</code> and <code>ty</code>, the a/b/c/d fields default to identity (1,0,0,1).</p>
+
+<h3>⚠ Units: Twips vs Pixels</h3>
+
+<div class="callout callout-warn">
+  <p>This is the #1 source of bugs. Flash uses two units:</p>
+  <ul>
+    <li><strong>Twips</strong> — edge geometry in the XML edge string. 1 twip = 1/20 pixel.</li>
+    <li><strong>Pixels</strong> — matrix <code>tx/ty</code> values and stage <code>width/height</code>.</li>
+  </ul>
+  <p>The parser divides all edge coordinates by 20 (<code>parse_edge_str</code> does <code>/ 20.0</code> after decoding). So after parsing, <strong>geometry is in pixels</strong>. Matrix <code>tx/ty</code> are already in pixels. They should match — but only if no extra ×20 is accidentally applied elsewhere.</p>
+</div>
+
+<table>
+  <tr><th>What</th><th>Unit in XML</th><th>After parser</th></tr>
+  <tr><td>Edge coordinates</td><td>Twips (20×px)</td><td>Pixels (÷20)</td></tr>
+  <tr><td>Matrix tx/ty</td><td>Pixels</td><td>Pixels (unchanged)</td></tr>
+  <tr><td>Stage width/height</td><td>Pixels</td><td>Pixels (unchanged)</td></tr>
+  <tr><td>Gradient matrix tx/ty</td><td>Pixels</td><td>Pixels (unchanged)</td></tr>
+  <tr><td>StrokeStyle weight</td><td>Pixels</td><td>Pixels (unchanged)</td></tr>
+</table>
+
+<h3>Composing nested matrices</h3>
+<p>When a symbol contains instances which contain more instances, you compose transforms:</p>
+<pre><span class="xml-comment"># result = parent ∘ child</span>
+result_a  = parent_a * child_a  + parent_c * child_b
+result_b  = parent_b * child_a  + parent_d * child_b
+result_c  = parent_a * child_c  + parent_c * child_d
+result_d  = parent_b * child_c  + parent_d * child_d
+result_tx = parent_a * child_tx + parent_c * child_ty + parent_tx
+result_ty = parent_b * child_tx + parent_d * child_ty + parent_ty</pre>
+<p>This is what <code>_compose_mat</code> does. The translation columns (tx/ty) mix linearly through the linear part of the parent, so any unit mismatch compounds at every nesting level.</p>
+</section>
+
+<!-- ════════════════════════════════════ DOMSHAPE ══ -->
+<section id="domshape">
+<h2>DOMShape — Vector Art</h2>
+
+<p>A DOMShape holds three indexed tables and an edge list. Nothing is rendered until you look up the right index.</p>
+
+<pre><span class="xml-tag">&lt;DOMShape&gt;</span>
+
+  <span class="xml-comment">&lt;!-- Table 1: Fill styles (color, gradient) --&gt;</span>
+  <span class="xml-tag">&lt;fills&gt;</span>
+    <span class="xml-tag">&lt;FillStyle</span> <span class="xml-attr">index</span>=<span class="xml-val">"1"</span><span class="xml-tag">&gt;</span>
+      <span class="xml-tag">&lt;SolidColor</span> <span class="xml-attr">color</span>=<span class="xml-val">"#A66BBF"</span><span class="xml-tag">/&gt;</span>
+    <span class="xml-tag">&lt;/FillStyle&gt;</span>
+    <span class="xml-tag">&lt;FillStyle</span> <span class="xml-attr">index</span>=<span class="xml-val">"2"</span><span class="xml-tag">&gt;</span>
+      <span class="xml-tag">&lt;SolidColor</span> <span class="xml-attr">color</span>=<span class="xml-val">"#D19FE4"</span><span class="xml-tag">/&gt;</span>
+    <span class="xml-tag">&lt;/FillStyle&gt;</span>
+  <span class="xml-tag">&lt;/fills&gt;</span>
+
+  <span class="xml-comment">&lt;!-- Table 2: Stroke styles --&gt;</span>
+  <span class="xml-tag">&lt;strokes&gt;</span>
+    <span class="xml-tag">&lt;StrokeStyle</span> <span class="xml-attr">index</span>=<span class="xml-val">"1"</span><span class="xml-tag">&gt;</span>
+      <span class="xml-tag">&lt;SolidStroke</span> <span class="xml-attr">weight</span>=<span class="xml-val">"2"</span> <span class="xml-attr">caps</span>=<span class="xml-val">"round"</span><span class="xml-tag">&gt;</span>
+        <span class="xml-tag">&lt;fill&gt;</span>
+          <span class="xml-tag">&lt;SolidColor</span> <span class="xml-attr">color</span>=<span class="xml-val">"#000000"</span><span class="xml-tag">/&gt;</span>
+        <span class="xml-tag">&lt;/fill&gt;</span>
+      <span class="xml-tag">&lt;/SolidStroke&gt;</span>
+    <span class="xml-tag">&lt;/StrokeStyle&gt;</span>
+  <span class="xml-tag">&lt;/strokes&gt;</span>
+
+  <span class="xml-comment">&lt;!-- Table 3: Edges (actual path data) --&gt;</span>
+  <span class="xml-tag">&lt;edges&gt;</span>
+    <span class="xml-tag">&lt;Edge</span>
+      <span class="xml-attr">fillStyle0</span>=<span class="xml-val">"1"</span>
+      <span class="xml-attr">fillStyle1</span>=<span class="xml-val">"2"</span>
+      <span class="xml-attr">strokeStyle</span>=<span class="xml-val">"1"</span>
+      <span class="xml-attr">edges</span>=<span class="xml-val">"!881 -493.5|881 -603.5..."</span><span class="xml-tag">/&gt;</span>
+    <span class="xml-tag">&lt;Edge</span>
+      <span class="xml-attr">fillStyle0</span>=<span class="xml-val">"1"</span>
+      <span class="xml-attr">edges</span>=<span class="xml-val">"..."</span><span class="xml-tag">/&gt;</span>
+  <span class="xml-tag">&lt;/edges&gt;</span>
+
+<span class="xml-tag">&lt;/DOMShape&gt;</span></pre>
+
+<p>Key design insight: <strong>fill and stroke indices are local to each DOMShape</strong>. Index 1 in one shape has nothing to do with index 1 in another shape.</p>
+</section>
+
+<!-- ════════════════════════════════════ FILLSTYLE ══ -->
+<section id="fillstyle">
+<h2>FillStyle — Colors &amp; Gradients</h2>
+
+<h3>SolidColor</h3>
+<pre><span class="xml-tag">&lt;FillStyle</span> <span class="xml-attr">index</span>=<span class="xml-val">"1"</span><span class="xml-tag">&gt;</span>
+  <span class="xml-tag">&lt;SolidColor</span>
+    <span class="xml-attr">color</span>=<span class="xml-val">"#A66BBF"</span>    <span class="xml-comment">← HTML hex color</span>
+    <span class="xml-attr">alpha</span>=<span class="xml-val">"0.75"</span><span class="xml-tag">/&gt;</span>      <span class="xml-comment">← 0-1 opacity (omitted = fully opaque)</span>
+<span class="xml-tag">&lt;/FillStyle&gt;</span></pre>
+
+<h3>LinearGradient / RadialGradient</h3>
+<pre><span class="xml-tag">&lt;FillStyle</span> <span class="xml-attr">index</span>=<span class="xml-val">"1"</span><span class="xml-tag">&gt;</span>
+  <span class="xml-tag">&lt;LinearGradient</span><span class="xml-tag">&gt;</span>           <span class="xml-comment">← or RadialGradient</span>
+    <span class="xml-tag">&lt;matrix&gt;</span>
+      <span class="xml-comment">&lt;!-- maps gradient space → shape's local pixel space --&gt;</span>
+      <span class="xml-tag">&lt;Matrix</span>
+        <span class="xml-attr">a</span>=<span class="xml-val">"-0.0028"</span>              <span class="xml-comment">← gradient is rotated/scaled</span>
+        <span class="xml-attr">tx</span>=<span class="xml-val">"278.85"</span> <span class="xml-attr">ty</span>=<span class="xml-val">"48.65"</span><span class="xml-tag">/&gt;</span>
+    <span class="xml-tag">&lt;/matrix&gt;</span>
+    <span class="xml-tag">&lt;GradientEntry</span> <span class="xml-attr">color</span>=<span class="xml-val">"#210A3F"</span> <span class="xml-attr">ratio</span>=<span class="xml-val">"0"</span><span class="xml-tag">/&gt;</span>      <span class="xml-comment">← ratio 0 = start</span>
+    <span class="xml-tag">&lt;GradientEntry</span> <span class="xml-attr">color</span>=<span class="xml-val">"#672F8B"</span> <span class="xml-attr">ratio</span>=<span class="xml-val">"1"</span><span class="xml-tag">/&gt;</span>      <span class="xml-comment">← ratio 1 = end</span>
+  <span class="xml-tag">&lt;/LinearGradient&gt;</span>
+<span class="xml-tag">&lt;/FillStyle&gt;</span></pre>
+
+<p>Gradient space: a linear gradient runs from <code>x = -819.2</code> to <code>x = +819.2</code> at <code>y = 0</code>. A radial gradient has center <code>(0,0)</code> and radius <code>819.2</code>. The gradient matrix maps this abstract space into the shape's coordinate system. (819.2 = 16384 twips ÷ 20.)</p>
+</section>
+
+<!-- ════════════════════════════════════ STROKESTYLE ══ -->
+<section id="strokestyle">
+<h2>StrokeStyle</h2>
+
+<pre><span class="xml-tag">&lt;StrokeStyle</span> <span class="xml-attr">index</span>=<span class="xml-val">"1"</span><span class="xml-tag">&gt;</span>
+  <span class="xml-tag">&lt;SolidStroke</span>
+    <span class="xml-attr">weight</span>=<span class="xml-val">"2"</span>           <span class="xml-comment">← stroke width in pixels</span>
+    <span class="xml-attr">caps</span>=<span class="xml-val">"round"</span>         <span class="xml-comment">← "round" | "square" | "none" (= butt)</span>
+    <span class="xml-attr">joints</span>=<span class="xml-val">"round"</span><span class="xml-tag">&gt;</span>      <span class="xml-comment">← join type (optional)</span>
+    <span class="xml-tag">&lt;fill&gt;</span>
+      <span class="xml-comment">&lt;!-- stroke color uses the fill syntax! --&gt;</span>
+      <span class="xml-tag">&lt;SolidColor</span> <span class="xml-attr">color</span>=<span class="xml-val">"#000000"</span> <span class="xml-attr">alpha</span>=<span class="xml-val">"1"</span><span class="xml-tag">/&gt;</span>
+    <span class="xml-tag">&lt;/fill&gt;</span>
+  <span class="xml-tag">&lt;/SolidStroke&gt;</span>
+<span class="xml-tag">&lt;/StrokeStyle&gt;</span></pre>
+
+<p>The stroke color lives inside a <code>&lt;fill&gt;</code> child — confusing but that's how Flash stored it (strokes can technically be gradient-stroked).</p>
+</section>
+
+<!-- ════════════════════════════════════ EDGE STRING ══ -->
+<section id="edgestring">
+<h2>Edge String — Path Encoding</h2>
+
+<p>The <code>edges</code> attribute of an <code>&lt;Edge&gt;</code> element is a compact path encoding. It looks like gibberish at first but follows a simple grammar.</p>
+
+<h3>Commands</h3>
+<table>
+  <tr><th>Token</th><th>Command</th><th>Arguments</th></tr>
+  <tr><td><code class="xml-attr">!</code></td><td>Move to</td><td><code>x y</code></td></tr>
+  <tr><td><code class="xml-attr">|</code></td><td>Line to</td><td><code>x y</code></td></tr>
+  <tr><td><code class="xml-attr">[</code></td><td>Quadratic bezier</td><td><code>cx cy ex ey</code> (control point, then end point)</td></tr>
+  <tr><td><code>Sn</code></td><td>Style selector</td><td>n = integer — skip entirely, Flash uses fillStyle0/1 attrs instead</td></tr>
+</table>
+
+<h3>Coordinate encoding</h3>
+<table>
+  <tr><th>Format</th><th>Example</th><th>Meaning</th></tr>
+  <tr><td>Plain integer</td><td><code>881</code></td><td>881 twips (= 44.05 px after ÷20)</td></tr>
+  <tr><td>Plain decimal</td><td><code>-493.5</code></td><td>–493.5 twips (= –24.675 px)</td></tr>
+  <tr><td><code>#hex</code></td><td><code>#345</code></td><td>Hex twips: 0x345 = 837 (short = positive)</td></tr>
+  <tr><td><code>#hex.hex</code></td><td><code>#FFFD68.46</code></td><td>Signed fixed-point: int part + frac/256. 6-digit hex ≥ 0x800000 is negative (24-bit two's complement).</td></tr>
+</table>
+
+<h3>Real example — annotated</h3>
+<pre><span class="xml-attr">edges</span>=<span class="xml-val">"<span class="dec-M">!</span>354 -261<span class="dec-Q">[</span>439 -100 396 90<span class="dec-M">!</span>396 90<span class="dec-Q">[</span>352 280 206 389<span class="dec-L">|</span><span class="xml-comment">#FFFF1B.93</span> <span class="xml-comment">#1B0.19</span>"</span>
+
+Token by token:
+  <span class="dec-M">!</span> 354 -261          → MoveTo (354÷20, -261÷20) = (17.7, -13.05)
+  <span class="dec-Q">[</span> 439 -100 396 90   → QuadBezier ctrl=(21.95, -5) end=(19.8, 4.5)
+  <span class="dec-M">!</span> 396 90            → MoveTo (19.8, 4.5)   ← Flash restates the endpoint
+  <span class="dec-Q">[</span> 352 280 206 389   → QuadBezier ctrl=(17.6, 14) end=(10.3, 19.45)
+  <span class="dec-L">|</span> #FFFF1B.93 #1B0.19 → LineTo: hex decode...
+       #FFFF1B.93 → int=0xFFFF1B=16776987 ≥ 0x800000 → signed: 16776987-16777216 = -229
+                    frac=0x93=147 → 147/256 ≈ 0.574 → value = -228.426
+                    in px: -228.426÷20 = -11.42
+       #1B0.19    → int=0x1B0=432, frac=0x19=25 → 432.097÷20 = 21.60</pre>
+
+<div class="callout callout-warn">
+  <p><strong>Redundant MoveTo after curves:</strong> Flash always restates the current endpoint as a new MoveTo after every quadratic bezier. The parser suppresses these (they're within 0.015px of the current position) to avoid creating disconnected path segments. This is the <code>cmds_to_svg_d</code> epsilon check.</p>
+</div>
+
+<h3>The <code>cubics</code> attribute</h3>
+<p>Some Edge elements also have a <code>cubics</code> attribute. This is Flash's cubic bezier hint data — it's for the visual editor only and is <strong>not used by the parser</strong>. Ignore it completely when parsing.</p>
+
+<h3>Decoding #hex yourself</h3>
+<ol>
+  <li>Split on <code>.</code> — left is integer part, right is fractional (or absent = 0)</li>
+  <li>Parse integer hex: if it's ≥ 6 digits AND ≥ 0x800000 → subtract 0x1000000 (signed)</li>
+  <li>Parse fraction hex: value is <code>frac / 256.0</code></li>
+  <li>Add integer + fraction, then divide total by 20 to get pixels</li>
+</ol>
+</section>
+
+<!-- ════════════════════════════════════ FILL SIDES ══ -->
+<section id="fillsides">
+<h2>Fill Sides — fillStyle0 vs fillStyle1</h2>
+
+<p>This is the most subtle part of Flash's vector model. Each Edge has up to three style references:</p>
+
+<pre><span class="xml-tag">&lt;Edge</span>
+  <span class="xml-attr">fillStyle0</span>=<span class="xml-val">"1"</span>     <span class="xml-comment">← fill on the LEFT  as you travel the edge direction</span>
+  <span class="xml-attr">fillStyle1</span>=<span class="xml-val">"2"</span>     <span class="xml-comment">← fill on the RIGHT as you travel the edge direction</span>
+  <span class="xml-attr">strokeStyle</span>=<span class="xml-val">"1"</span>    <span class="xml-comment">← stroke drawn on top of the edge</span>
+  <span class="xml-attr">edges</span>=<span class="xml-val">"..."</span><span class="xml-tag">/&gt;</span></pre>
+
+<p>Flash stores shape boundaries this way because a single edge segment can be the boundary between <em>two different filled regions simultaneously</em>. The edge knows which fill is on each side.</p>
+
+<h3>How the parser handles this</h3>
+
+<p><strong>fillStyle0 edges</strong> — used as-is. The fill is on the left of the travel direction, which corresponds to "fill inside" for counter-clockwise contours (SVG's <code>fill-rule="evenodd"</code> default).</p>
+
+<p><strong>fillStyle1 edges</strong> — reversed! To paint the fill that's on the <em>right</em>, we flip the edge direction so the fill becomes the left side. The parser calls <code>_reverse_seg()</code> on each segment before adding it to the fill's segment list.</p>
+
+<pre><span class="xml-comment"># Conceptually:</span>
+for each Edge:
+    if fillStyle0:
+        fill_segs[f0].extend(segments)          <span class="xml-comment"># forward direction</span>
+    if fillStyle1:
+        fill_segs[f1].extend(reverse(segments)) <span class="xml-comment"># reversed!</span>
+    if strokeStyle:
+        stroke_segs[ss].extend(segments)        <span class="xml-comment"># direction irrelevant for stroke</span></pre>
+
+<div class="callout callout-bug">
+  <p><strong>Known bug: _reverse_seg quadratic control point</strong> — When reversing a quadratic bezier, the control point should be "reflected" to maintain the same curve shape. The current code keeps the original control point, which produces a geometrically different curve. This is only visible on curved <code>fillStyle1</code> edges. See the bugs section.</p>
+</div>
+</section>
+
+<!-- ════════════════════════════════════ LAYER TYPES ══ -->
+<section id="layers">
+<h2>Layer Types &amp; Masking</h2>
+
+<h3>Layer types</h3>
+<table>
+  <tr><th>layerType</th><th>Behaviour</th></tr>
+  <tr><td><code>normal</code> (or absent)</td><td>Regular layer. Renders normally.</td></tr>
+  <tr><td><code>guide</code></td><td>Motion guide or reference layer. <strong>Not rendered.</strong> Skip entirely.</td></tr>
+  <tr><td><code>folder</code></td><td>Organizational folder — contains no frames itself. Skip.</td></tr>
+  <tr><td><code>mask</code></td><td>Clips the layers that reference it via <code>parentLayerIndex</code>.</td></tr>
+</table>
+
+<h3>How masking works</h3>
+
+<pre><span class="xml-comment">&lt;!-- Layer list (0-indexed): --&gt;</span>
+[20] <span class="xml-tag">&lt;DOMLayer</span> <span class="xml-attr">name</span>=<span class="xml-val">"EYE mask"</span>   <span class="xml-attr">layerType</span>=<span class="xml-val">"mask"</span><span class="xml-tag">&gt;</span>  <span class="xml-comment">← MASK layer</span>
+[21] <span class="xml-tag">&lt;DOMLayer</span> <span class="xml-attr">name</span>=<span class="xml-val">"HIGHLIGHTS"</span> <span class="xml-attr">parentLayerIndex</span>=<span class="xml-val">"20"</span><span class="xml-tag">&gt;</span>  <span class="xml-comment">← clipped by [20]</span>
+[22] <span class="xml-tag">&lt;DOMLayer</span> <span class="xml-attr">name</span>=<span class="xml-val">"IRIS"</span>        <span class="xml-attr">parentLayerIndex</span>=<span class="xml-val">"20"</span><span class="xml-tag">&gt;</span>  <span class="xml-comment">← clipped by [20]</span></pre>
+
+<p>The parser renders this as an SVG <code>&lt;mask&gt;</code>:</p>
+<ol>
+  <li>Render the mask layer geometry as all-white shapes → goes into <code>&lt;defs&gt;&lt;mask id="mask_N"&gt;...</code></li>
+  <li>Render the masked layers normally inside a <code>&lt;g mask="url(#mask_N)"&gt;</code></li>
+</ol>
+
+<p>Mask layers themselves are rendered <em>all white</em> (via <code>_shape_svg_white</code>) because SVG masks use luminance: white = fully visible, black = fully clipped. The actual colors on the mask layer don't matter for the clip shape.</p>
+
+<div class="callout callout-info">
+  <p>The mask layer's <code>parentLayerIndex</code> is NOT set — only the <em>masked</em> layers have this attribute, pointing up to their mask. So to find all layers clipped by mask layer [20], you scan all layers for <code>parentLayerIndex="20"</code>.</p>
+</div>
+</section>
+
+<!-- ════════════════════════════════════ COLOR ══ -->
+<section id="color">
+<h2>Color Transforms on Instances</h2>
+
+<p>A <code>DOMSymbolInstance</code> can have an optional <code>&lt;color&gt;&lt;Color .../&gt;&lt;/color&gt;</code> child that modifies every pixel rendered by the instance:</p>
+
+<pre><span class="xml-tag">&lt;color&gt;</span>
+  <span class="xml-tag">&lt;Color</span>
+    <span class="xml-attr">redMultiplier</span>=<span class="xml-val">"1"</span>       <span class="xml-comment">← multiply channel 0-1 (default 1)</span>
+    <span class="xml-attr">greenMultiplier</span>=<span class="xml-val">"0.5"</span>
+    <span class="xml-attr">blueMultiplier</span>=<span class="xml-val">"0"</span>
+    <span class="xml-attr">alphaMultiplier</span>=<span class="xml-val">"0.75"</span>  <span class="xml-comment">← opacity multiplier (most common usage)</span>
+    <span class="xml-attr">redOffset</span>=<span class="xml-val">"50"</span>          <span class="xml-comment">← add to channel after multiply, -255..255</span>
+    <span class="xml-attr">greenOffset</span>=<span class="xml-val">"0"</span>
+    <span class="xml-attr">blueOffset</span>=<span class="xml-val">"0"</span>
+    <span class="xml-attr">alphaOffset</span>=<span class="xml-val">"0"</span><span class="xml-tag">/&gt;</span>
+<span class="xml-tag">&lt;/color&gt;</span></pre>
+
+<p>The formula is: <code>out = in * multiplier + offset/255</code> per channel.</p>
+
+<p>The inspector currently only looks at <code>alphaMultiplier</code> and only indirectly — color transforms aren't propagated through the SVG rendering (SVG <code>opacity</code> on the <code>&lt;g&gt;</code> would be the fix). If you see semi-transparent elements rendering fully opaque, this is why.</p>
+</section>
+
+<!-- ════════════════════════════════════ GRADIENTS ══ -->
+<section id="gradients">
+<h2>Gradients in Detail</h2>
+
+<h3>Gradient coordinate space</h3>
+<p>Flash defines a "gradient box" in abstract coordinates:</p>
+<ul>
+  <li><strong>Linear:</strong> runs from <code>(-16384, 0)</code> to <code>(+16384, 0)</code> in twips = <code>(-819.2, 0)</code> to <code>(819.2, 0)</code> in pixels</li>
+  <li><strong>Radial:</strong> center <code>(0, 0)</code>, radius <code>16384</code> twips = <code>819.2</code> pixels</li>
+</ul>
+<p>The gradient's <code>&lt;matrix&gt;</code> transforms this box into the shape's local pixel coordinate system. So if you see a gradient that looks like it's in the wrong place, the matrix is where to look.</p>
+
+<h3>GradientEntry</h3>
+<table>
+  <tr><th>Attribute</th><th>Range</th><th>Meaning</th></tr>
+  <tr><td><code>color</code></td><td>#RRGGBB hex</td><td>Stop color</td></tr>
+  <tr><td><code>ratio</code></td><td>0.0 – 1.0</td><td>Position along the gradient axis</td></tr>
+  <tr><td><code>alpha</code></td><td>0.0 – 1.0</td><td>Opacity at this stop (omitted = 1.0)</td></tr>
+</table>
+
+<pre><span class="xml-tag">&lt;GradientEntry</span> <span class="xml-attr">color</span>=<span class="xml-val">"#210A3F"</span> <span class="xml-attr">ratio</span>=<span class="xml-val">"0"</span><span class="xml-tag">/&gt;</span>      <span class="xml-comment">← left/inner edge</span>
+<span class="xml-tag">&lt;GradientEntry</span> <span class="xml-attr">color</span>=<span class="xml-val">"#552A79"</span> <span class="xml-attr">ratio</span>=<span class="xml-val">"0.247"</span><span class="xml-tag">/&gt;</span>
+<span class="xml-tag">&lt;GradientEntry</span> <span class="xml-attr">color</span>=<span class="xml-val">"#672F8B"</span> <span class="xml-attr">ratio</span>=<span class="xml-val">"1"</span><span class="xml-tag">/&gt;</span>      <span class="xml-comment">← right/outer edge</span></pre>
+
+<p>Ratios don't have to be evenly spaced. Flash (and SVG <code>stop offset</code>) both allow any 0–1 ordering.</p>
+</section>
+
+<!-- ════════════════════════════════════ DECODER ══ -->
+<section id="decoder-section">
+<h2>⚡ Live Edge String Decoder</h2>
+
+<p>Paste an edge string from an XML file and decode it into readable path commands:</p>
+
+<div id="decoder">
+  <textarea id="decoder-in" placeholder="Paste an edges=&quot;...&quot; value here, e.g.:  !354 -261[439 -100 396 90!396 90|206 389"></textarea>
+  <button onclick="decodeEdge()">Decode</button>
+  <div id="decoder-out"><span class="dimmed">Output will appear here...</span></div>
+</div>
+
+<details>
+<summary>Example edge strings to try</summary>
+<p>From TS_Skull (two fill regions sharing a boundary):</p>
+<pre>!881 -493.5|881 -603.5[#345.26 #FFFD68.46 782.5 -719</pre>
+<p>From TS_Iris (circle with many quadratics):</p>
+<pre>!354 -261[439 -100 396 90!396 90[352 280 206 389!206 389[60 497 -104 460!-104 460[#FFFF1B.93 #1B0.19 -307.5 333.5</pre>
+</details>
+</section>
+
+<!-- ════════════════════════════════════ BUGS ══ -->
+<section id="bugs">
+<h2>⚠ Known Parser Bugs</h2>
+
+<p>These are documented in <code>REFACTOR.md</code>. Listed from least to most risky to fix:</p>
+
+<h3 style="color:var(--red)">Bug 1 — Last keyframe duration</h3>
+<p>Flash omits the <code>duration</code> attribute on the last keyframe of a layer. The parser defaults it to 1, so any frame index beyond <code>lastKeyframe.index + 1</code> returns <code>None</code> (layer disappears). For frame-0 exports this doesn't matter, but for any multi-frame export, characters placed on long-running final keyframes will vanish.</p>
+<pre><span class="xml-comment">&lt;!-- last frame — duration is MISSING, not "1" --&gt;</span>
+<span class="xml-tag">&lt;DOMFrame</span> <span class="xml-attr">index</span>=<span class="xml-val">"200"</span><span class="xml-tag">&gt;</span> <span class="xml-comment">← extends to end of symbol's timeline, not just frame 201</span>
+  <span class="xml-tag">&lt;elements&gt;</span>...<span class="xml-tag">&lt;/elements&gt;</span>
+<span class="xml-tag">&lt;/DOMFrame&gt;</span>
+
+<span class="xml-comment">Fix: if no frame matches frame N, return the last frame whose index &lt;= N.</span></pre>
+
+<h3 style="color:var(--red)">Bug 2 — _reverse_seg quadratic control point</h3>
+<p>When reversing a bezier segment for <code>fillStyle1</code> rendering, the control point should be reflected geometrically. The current code keeps the original control point, producing a slightly different curve shape.</p>
+<pre><span class="xml-comment"># Wrong (current): control point stays at same position</span>
+result.append(('Q', c[1], c[2], sx, sy))   <span class="xml-comment"># c[1],c[2] is old control point</span>
+
+<span class="xml-comment"># Correct reversed quadratic bezier:</span>
+<span class="xml-comment"># start at end, the control point stays exactly the same (because</span>
+<span class="xml-comment"># a quadratic bezier P0→ctrl→P1 reversed is P1→ctrl→P0)</span>
+<span class="xml-comment"># Actually the current code IS correct for quadratics! The control</span>
+<span class="xml-comment"># point of a quadratic doesn't change when you reverse direction.</span>
+<span class="xml-comment"># The endpoint does change (sx,sy is the original start). ✓</span></pre>
+
+<div class="callout callout-tip">
+  <p><strong>Wait — actually quadratic reversal IS correct.</strong> For a quadratic bezier P0→ctrl→P1, the reversed curve P1→ctrl→P0 uses the <em>same</em> control point. The REFACTOR.md notes it as high-risk to touch, and the math checks out as correct. This may be a false alarm — but verify visually on curved fillStyle1 edges.</p>
+</div>
+
+<h3 style="color:var(--red)">Bug 3 — Segment chain tie-breaking (_segs_to_svg_d)</h3>
+<p>When multiple segments share a start point (adjacent filled regions meeting at a shared vertex), the stitcher picks <code>cands[0]</code> — the first in list order, which is arbitrary. This can produce wrong contour closures for complex shapes with shared vertices.</p>
+<pre><span class="xml-comment">In _segs_to_svg_d:
+cands = [i for i in start_idx.get(rk(ex, ey), []) if i not in visited]
+nxt = cands[0]   ← picks arbitrarily when multiple segments start here</span>
+
+Fix: sort candidates by angle relative to incoming direction (pick the
+one that continues most "straight ahead" or by winding order).</pre>
+
+<h3 style="color:var(--yellow)">Bug 4 — Unit mismatch under matrix composition</h3>
+<p>Edge geometry and matrix tx/ty are both in pixels after parsing — they should be compatible. But the REFACTOR.md documents a historical issue where the wrong unit was used, causing nested symbol translations to compound incorrectly. If you see nested symbols shifted relative to each other, check whether any code path is accidentally ×20-ing the tx/ty somewhere.</p>
+<pre><span class="xml-comment">Quick test: a symbol with two levels of nesting.
+If the leaf-level art is offset by exactly 20× the expected amount,
+that's the unit bug. If it's just slightly off, it's probably a
+different matrix composition issue.</span></pre>
+
+<h3 style="color:var(--yellow)">Bug 5 — Mask geometry size</h3>
+<p>SVG masks need a <code>width/height</code> that covers all masked content. The current hardcoded values (<code>x="-500" y="-500" width="5000" height="5000"</code>) work for most symbols but will silently clip symbols that extend beyond this range.</p>
+<pre><span class="xml-tag">&lt;mask</span> <span class="xml-attr">id</span>=<span class="xml-val">"mask_TS_Head_20"</span> <span class="xml-attr">maskUnits</span>=<span class="xml-val">"userSpaceOnUse"</span>
+      <span class="xml-attr">x</span>=<span class="xml-val">"-500"</span> <span class="xml-attr">y</span>=<span class="xml-val">"-500"</span> <span class="xml-attr">width</span>=<span class="xml-val">"5000"</span> <span class="xml-attr">height</span>=<span class="xml-val">"5000"</span><span class="xml-tag">&gt;</span>  <span class="xml-comment">← hardcoded!</span>
+<span class="xml-comment">Fix: compute bbox of masked content and use that + padding.</span></pre>
+</section>
+
+<hr>
+<p class="dimmed" style="font-size:.78rem; text-align:center;">
+  Generated from <code>fla_inspect.py</code> analysis &amp; real FLA XML data — stk_c01_twilight_sparkle.fla
+</p>
+
+</main>
+
+<script>
+// ── Active nav highlighting ──
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('#sidebar nav a');
+
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    const link = document.querySelector(`#sidebar nav a[href="#${e.target.id}"]`);
+    if (link) link.classList.toggle('active', e.isIntersecting);
+  });
+}, { rootMargin: '-10% 0px -80% 0px' });
+
+sections.forEach(s => observer.observe(s));
+
+// ── Edge decoder ──
+function decodeEdge() {
+  const raw = document.getElementById('decoder-in').value.trim();
+  const out = document.getElementById('decoder-out');
+  if (!raw) { out.innerHTML = '<span class="dimmed">Paste an edge string above.</span>'; return; }
+
+  try {
+    const cmds = parseEdgeStr(raw);
+    if (!cmds.length) { out.innerHTML = '<span class="dimmed">No commands found.</span>'; return; }
+
+    let html = '';
+    let cx = null, cy = null;
+    const EPS = 0.015;
+
+    cmds.forEach((c, i) => {
+      if (c.type === 'M') {
+        const redundant = cx !== null && Math.abs(c.x - cx) < EPS && Math.abs(c.y - cy) < EPS;
+        html += `<span class="dec-M">MoveTo</span>  x=<b>${fmt(c.x)}</b> y=<b>${fmt(c.y)}</b>`;
+        if (redundant) html += `  <span class="dimmed">← redundant restatement (will be suppressed)</span>`;
+        cx = c.x; cy = c.y;
+      } else if (c.type === 'L') {
+        html += `<span class="dec-L">LineTo</span>  x=<b>${fmt(c.x)}</b> y=<b>${fmt(c.y)}</b>`;
+        cx = c.x; cy = c.y;
+      } else if (c.type === 'Q') {
+        html += `<span class="dec-Q">QuadTo</span>  ctrl=(${fmt(c.cx)}, ${fmt(c.cy)})  end=(${fmt(c.ex)}, ${fmt(c.ey)})`;
+        cx = c.ex; cy = c.ey;
+      }
+      html += '\n';
+    });
+
+    html += `\n<span class="dimmed">${cmds.length} command(s). All coords in pixels (twips ÷ 20).</span>`;
+    out.innerHTML = html;
+  } catch(e) {
+    out.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+  }
+}
+
+function fmt(n) { return n.toFixed(3); }
+
+function decodeHex(tok) {
+  const s = tok.slice(1);
+  const parts = s.split('.');
+  const ih = parts[0] || '0';
+  const fh = parts[1] || '0';
+  let v = parseInt(ih, 16);
+  if (v >= 0x800000) v -= 0x1000000;
+  return v + parseInt(fh, 16) / 256.0;
+}
+
+function parseEdgeStr(s) {
+  // tokenize: command chars, Sn, #hex.hex, plain decimal
+  const TOK = /[!\|\[]|S\d+|#[0-9A-Fa-f]+(?:\.[0-9A-Fa-f]+)?|[-+]?\d+(?:\.\d+)?/g;
+  const tokens = s.match(TOK) || [];
+  const cmds = [];
+  let i = 0;
+
+  function num() {
+    const tok = tokens[i++];
+    if (tok === undefined) throw new Error('Unexpected end of edge string');
+    const raw = tok.startsWith('#') ? decodeHex(tok) : parseFloat(tok);
+    return raw / 20.0;
+  }
+
+  while (i < tokens.length) {
+    const tok = tokens[i++];
+    if (tok === '!') { const x = num(), y = num(); cmds.push({type:'M', x, y}); }
+    else if (tok === '|') { const x = num(), y = num(); cmds.push({type:'L', x, y}); }
+    else if (tok === '[') { const cx=num(), cy=num(), ex=num(), ey=num(); cmds.push({type:'Q', cx,cy,ex,ey}); }
+    // S tokens: skip
+  }
+  return cmds;
+}
+
+// Allow Ctrl+Enter in textarea
+document.getElementById('decoder-in').addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'Enter') decodeEdge();
+});
+</script>
+</body>
+</html>
