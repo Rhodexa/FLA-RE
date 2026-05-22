@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FLA Symbol Inspector</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:    #0f1117;
+  --bg2:   #20232c;
+  --bg3:   #292b33;
+  --border:#3c3e4b;
+  --text:  #c8d0ea;
+  --dim:   #696c77;
+  --bright:#eef1ff;
+  --blue:  #aab7da;
+  --cyan:  #69d4c8;
+  --green: #57c989;
+  --red:   #f76060;
+  --gold:  #e5a945;
+  --pink:  #f778a1;
+  --purple:#b085f5;
+}
+
+html, body { height: 100%; font-size: 13px; }
+body {
+  font-family: 'Consolas', 'Cascadia Code', 'SF Mono', monospace;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* ── Drop Zone ──────────────────────────────────── */
+#drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 14px;
+}
+
+.dz-inner {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 48px 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  transition: border-color .2s, background .2s;
+}
+
+#drop-zone.drag-over .dz-inner {
+  border-color: var(--blue);
+  background: rgba(124,158,248,.05);
+}
+
+.dz-title { font-size: 1.3em; font-weight: 600; color: var(--bright); }
+.dz-sub   { color: var(--dim); font-size: .9em; }
+
+.file-btn {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--blue);
+  padding: 7px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .9em;
+}
+.file-btn:hover { background: #252c46; }
+#file-input { display: none; }
+
+/* ── App shell ──────────────────────────────────── */
+#app { display: none; height: 100vh; flex-direction: column; }
+#app.on { display: flex; }
+
+.app-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.app-bar .fla-name { font-weight: 600; color: var(--bright); }
+.app-bar .sym-count { color: var(--dim); font-size: .82em; }
+.app-bar .reload {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  padding: 2px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .78em;
+}
+.app-bar .reload:hover { color: var(--text); }
+
+.app-body { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Sidebar ────────────────────────────────────── */
+.sidebar {
+  width: 270px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--bg2);
+}
+.search-wrap { padding: 8px; border-bottom: 1px solid var(--border); }
+.search-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: .84em;
+  outline: none;
+}
+.search-input:focus { border-color: var(--blue); }
+.search-input::placeholder { color: var(--dim); }
+
+#sym-list { overflow-y: auto; flex: 1; padding: 3px 0; }
+
+.sym-item {
+  padding: 3px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 3px;
+  margin: 1px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sym-item:hover { background: var(--bg3); }
+.sym-item.active { background: rgba(124,158,248,.14); }
+
+.dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-mc  { background: var(--blue); }
+.dot-gr  { background: var(--cyan); }
+.dot-btn { background: var(--gold); }
+.dot-root{ background: var(--pink); }
+
+.sym-item-name { overflow: hidden; text-overflow: ellipsis; font-size: .87em; }
+.sym-item.root-sym .sym-item-name { color: var(--bright); font-weight: 600; }
+
+/* ── Tree panel ─────────────────────────────────── */
+.tree-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.tree-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg2);
+}
+.back-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  padding: 2px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .78em;
+}
+.back-btn:disabled { opacity: .3; cursor: default; }
+.back-btn:not(:disabled):hover { color: var(--text); border-color: var(--blue); }
+
+.tree-sym-name { font-weight: 600; color: var(--bright); font-size: .98em; }
+.tree-sym-type { color: var(--dim); font-size: .8em; }
+
+.tree-ctrls { margin-left: auto; display: flex; gap: 5px; }
+.ctrl-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .75em;
+}
+.ctrl-btn:hover { color: var(--text); }
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px 14px;
+  font-size: .76em;
+  color: var(--dim);
+  border-bottom: 1px solid var(--border);
+  min-height: 22px;
+}
+.bc-item { color: var(--blue); cursor: pointer; }
+.bc-item:hover { text-decoration: underline; }
+.bc-sep { color: var(--dim); padding: 0 2px; }
+
+.tree-scroll { flex: 1; overflow: auto; padding: 10px 8px 20px; }
+
+/* ── Tree nodes ─────────────────────────────────── */
+details { margin: 1px 0; }
+
+details > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  user-select: none;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::marker { display: none; }
+details > summary:hover { background: rgba(255,255,255,.04); }
+
+.tog {
+  font-size: .6em;
+  color: var(--dim);
+  width: 9px;
+  display: inline-block;
+  flex-shrink: 0;
+  margin-right: 1px;
+}
+details[open] > summary > .tog::before  { content: '▼'; }
+details:not([open]) > summary > .tog::before { content: '▶'; }
+
+.kids {
+  padding-left: 16px;
+  border-left: 1px solid #222840;
+  margin-left: 8px;
+}
+
+/* badges */
+.bd {
+  font-size: .68em;
+  padding: 0px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.bd-normal  { background: rgba(200,208,234,.08); color: var(--dim); }
+.bd-mask    { background: rgba(247,96,96,.14);   color: var(--red); }
+.bd-masked  { background: rgba(247,150,150,.1);  color: #f79898; }
+.bd-guide   { background: rgba(107,117,153,.14); color: var(--dim); }
+.bd-folder  { background: rgba(124,158,248,.1);  color: var(--blue); }
+.bd-do      { background: rgba(229,169,69,.14);  color: var(--gold); }
+.bd-ff      { background: rgba(176,133,245,.1);  color: var(--purple); }
+
+/* layer summary */
+.lyr-idx  { color: var(--dim); min-width: 18px; font-size: .84em; }
+.lyr-name { color: var(--bright); font-weight: 500; font-size: .84em; }
+.par-ref  { color: var(--dim); font-size: .76em; }
+
+/* frame summary */
+.fr-range { color: var(--cyan); font-size: .82em; }
+.fr-dim   { color: var(--dim); font-size: .78em; }
+
+/* element rows */
+.er {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: .82em;
+}
+.er:hover { background: rgba(255,255,255,.03); }
+
+.tag-shape { color: var(--cyan); font-weight: 600; }
+.tag-inst  { color: var(--blue); font-weight: 600; }
+.tag-grp   { color: var(--purple); font-weight: 600; }
+.tag-text  { color: var(--gold); font-weight: 600; }
+
+.edges { color: var(--dim); }
+
+/* matrix display */
+.m-id   { color: var(--dim); opacity: .45; }
+.m-real { color: var(--green); }
+.m-inst { color: var(--dim); }
+
+.ml-real { font-size: .68em; font-weight: 700; color: var(--green); }
+.ml-redu { font-size: .68em; font-weight: 700; color: var(--dim); }
+
+/* fill swatch */
+.swatch {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 2px;
+  border: 1px solid rgba(255,255,255,.18);
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* instance link */
+.inst-link {
+  color: var(--blue);
+  text-decoration: none;
+  cursor: pointer;
+}
+.inst-link:hover { text-decoration: underline; }
+
+/* group summary */
+.grp-sum { font-size: .82em; }
+
+.no-elem { color: var(--dim); font-size: .8em; font-style: italic; padding: 2px 8px; }
+.tree-empty { display: flex; align-items: center; justify-content: center;
+              height: 100%; color: var(--dim); font-size: .9em; }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a3050; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a4570; }
+</style>
+</head>
+<body>
+
+<!-- ── Drop zone ────────────────────────────────────────────────────────────── -->
+<div id="drop-zone">
+  <div class="dz-inner">
+    <div class="dz-title">FLA Symbol Inspector</div>
+    <div class="dz-sub">Drag and drop an <code>.fla</code> file to inspect its symbol tree</div>
+    <button class="file-btn" onclick="document.getElementById('file-input').click()">Choose FLA file…</button>
+    <input type="file" id="file-input" accept=".fla,.zip">
+  </div>
+</div>
+
+<!-- ── App ──────────────────────────────────────────────────────────────────── -->
+<div id="app">
+  <div class="app-bar">
+    <span class="fla-name" id="hdr-name">—</span>
+    <span class="sym-count" id="hdr-count"></span>
+    <button class="reload" onclick="resetApp()">Load another FLA</button>
+  </div>
+  <div class="app-body">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="search-wrap">
+        <input type="text" class="search-input" id="search" placeholder="Filter symbols…">
+      </div>
+      <div id="sym-list"></div>
+    </div>
+
+    <!-- Tree panel -->
+    <div class="tree-panel">
+      <div class="tree-bar">
+        <button class="back-btn" id="back-btn" disabled>← Back</button>
+        <span class="tree-sym-name" id="tsn">—</span>
+        <span class="tree-sym-type" id="tst"></span>
+        <div class="tree-ctrls">
+          <button class="ctrl-btn" id="expand-all">Expand all</button>
+          <button class="ctrl-btn" id="collapse-all">Collapse all</button>
+        </div>
+      </div>
+      <div class="breadcrumb" id="breadcrumb"></div>
+      <div class="tree-scroll" id="tree-scroll">
+        <div class="tree-empty">Select a symbol from the list</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+'use strict';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let flaSymbols = new Map();   // name → XMLDocument
+let navHistory = [];          // stack of previously viewed symbol names
+let current    = null;        // currently displayed symbol name
+let allSymbols = [];          // [{name, type, isRoot}] sorted
+
+// ── XML helpers ───────────────────────────────────────────────────────────────
+function gEl(p, n) {
+  if (!p) return null;
+  for (const c of p.children) if (c.localName === n) return c;
+  return null;
+}
+function gEls(p, n) {
+  if (!p) return [];
+  return Array.from(p.children).filter(c => c.localName === n);
+}
+function gAll(p, n) {
+  if (!p) return [];
+  const r = [];
+  const w = e => { for (const c of e.children) { if (c.localName === n) r.push(c); w(c); } };
+  w(p);
+  return r;
+}
+
+// ── Matrix helpers ────────────────────────────────────────────────────────────
+const ID = {a:1,b:0,c:0,d:1,tx:0,ty:0};
+
+function readMat(el) {
+  if (!el) return ID;
+  const mw = gEl(el, 'matrix');
+  if (!mw) return ID;
+  const m = gEl(mw, 'Matrix');
+  if (!m) return ID;
+  const g = k => parseFloat(m.getAttribute(k) ?? (k==='a'||k==='d'?'1':'0'));
+  return {a:g('a'),b:g('b'),c:g('c'),d:g('d'),tx:g('tx'),ty:g('ty')};
+}
+
+function matEq(m1, m2) {
+  return m1.a===m2.a && m1.b===m2.b && m1.c===m2.c &&
+         m1.d===m2.d && m1.tx===m2.tx && m1.ty===m2.ty;
+}
+function isId(m) { return matEq(m, ID); }
+
+function fn(n) {
+  if (Math.abs(n - Math.round(n)) < 0.0005) return String(Math.round(n));
+  return n.toFixed(2).replace(/\.?0+$/, '');
+}
+
+function matStr(m) {
+  const {a,b,c,d,tx,ty} = m;
+  if (isId(m)) return null;
+  if (b===0&&c===0&&a===d&&tx===0&&ty===0) return `scale(${fn(a)})`;
+  if (b===0&&c===0&&a===1&&d===1)          return `translate(${fn(tx)}, ${fn(ty)})`;
+  if (b===0&&c===0&&tx===0&&ty===0)        return `scale(${fn(a)}, ${fn(d)})`;
+  if (b===0&&c===0) return `sc(${fn(a)},${fn(d)}) + tr(${fn(tx)},${fn(ty)})`;
+  return `matrix(${fn(a)},${fn(b)},${fn(c)},${fn(d)},${fn(tx)},${fn(ty)})`;
+}
+
+// ── Fill helpers ──────────────────────────────────────────────────────────────
+function fillColor(shape) {
+  const fills = gEl(shape, 'fills');
+  if (!fills) return null;
+  const fs = gEl(fills, 'FillStyle');
+  if (!fs) return null;
+  if (gEl(fs,'LinearGradient')||gEl(fs,'RadialGradient')) return 'gradient';
+  const sc = gEl(fs, 'SolidColor');
+  return sc ? (sc.getAttribute('color') || null) : null;
+}
+
+// ── HTML escape ───────────────────────────────────────────────────────────────
+function h(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── FLA loading ───────────────────────────────────────────────────────────────
+async function loadFLA(file) {
+  let zip;
+  try {
+    const buf = await file.arrayBuffer();
+    zip = await JSZip.loadAsync(buf);
+  } catch(e) {
+    alert('Could not read FLA: ' + e.message);
+    return;
+  }
+
+  flaSymbols.clear();
+  const parser = new DOMParser();
+  const jobs = [];
+
+  for (const [fname, entry] of Object.entries(zip.files)) {
+    if (!fname.startsWith('LIBRARY/') || !fname.endsWith('.xml')) continue;
+    jobs.push(entry.async('string').then(text => {
+      try {
+        const doc = parser.parseFromString(text, 'text/xml');
+        if (doc.querySelector('parsererror')) return;
+        const root = doc.documentElement;
+        const name = root.getAttribute('name') || fname;
+        flaSymbols.set(name, doc);
+      } catch(_) {}
+    }));
+  }
+
+  await Promise.all(jobs);
+
+  navHistory = [];
+  current = null;
+
+  document.getElementById('hdr-name').textContent = file.name;
+  document.getElementById('hdr-count').textContent = `${flaSymbols.size} symbols`;
+  buildSymbolList();
+  showApp();
+}
+
+// ── Symbol list ───────────────────────────────────────────────────────────────
+function buildSymbolList() {
+  allSymbols = [];
+  for (const [name, doc] of flaSymbols) {
+    const root = doc.documentElement;
+    const type = root.getAttribute('symbolType') || 'movie clip';
+    allSymbols.push({ name, type, isRoot: name.startsWith('~') });
+  }
+  allSymbols.sort((a,b) => {
+    if (a.isRoot !== b.isRoot) return a.isRoot ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  renderList(allSymbols);
+}
+
+function renderList(syms) {
+  const dot = s => {
+    if (s.isRoot) return 'dot-root';
+    if (s.type === 'graphic') return 'dot-gr';
+    if (s.type === 'button')  return 'dot-btn';
+    return 'dot-mc';
+  };
+  document.getElementById('sym-list').innerHTML = syms.map(s =>
+    `<div class="sym-item${s.isRoot?' root-sym':''}${s.name===current?' active':''}" data-sym="${h(s.name)}" title="${h(s.name)}">
+      <span class="dot ${dot(s)}"></span>
+      <span class="sym-item-name">${h(s.name)}</span>
+    </div>`
+  ).join('');
+}
+
+document.getElementById('search').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  renderList(q ? allSymbols.filter(s => s.name.toLowerCase().includes(q)) : allSymbols);
+});
+
+document.getElementById('sym-list').addEventListener('click', e => {
+  const item = e.target.closest('.sym-item');
+  if (item) navTo(item.dataset.sym);
+});
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function navTo(name, fromLink=false) {
+  if (!flaSymbols.has(name)) return;
+  if (fromLink && current) navHistory.push(current);
+  showSymbol(name);
+}
+
+function goBack() {
+  if (!navHistory.length) return;
+  showSymbol(navHistory.pop());
+}
+
+function showSymbol(name) {
+  current = name;
+  const doc = flaSymbols.get(name);
+  const symType = doc ? (doc.documentElement.getAttribute('symbolType') || 'movie clip') : '?';
+
+  document.getElementById('tsn').textContent = name;
+  document.getElementById('tst').textContent = `(${symType})`;
+  document.getElementById('back-btn').disabled = navHistory.length === 0;
+
+  // refresh list active state
+  document.querySelectorAll('.sym-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.sym === name)
+  );
+
+  // breadcrumb
+  const bc = document.getElementById('breadcrumb');
+  if (navHistory.length) {
+    bc.innerHTML = navHistory.map((n,i) =>
+      `<span class="bc-item" data-idx="${i}">${h(n)}</span><span class="bc-sep">›</span>`
+    ).join('');
+  } else {
+    bc.innerHTML = '';
+  }
+
+  // tree
+  const scroll = document.getElementById('tree-scroll');
+  if (!doc) {
+    scroll.innerHTML = `<div class="tree-empty">Symbol not found: ${h(name)}</div>`;
+    return;
+  }
+  scroll.innerHTML = renderTree(doc.documentElement);
+}
+
+document.getElementById('breadcrumb').addEventListener('click', e => {
+  const item = e.target.closest('.bc-item');
+  if (!item) return;
+  const idx = parseInt(item.dataset.idx, 10);
+  const name = navHistory[idx];
+  navHistory = navHistory.slice(0, idx);
+  showSymbol(name);
+});
+
+document.getElementById('tree-scroll').addEventListener('click', e => {
+  const link = e.target.closest('.inst-link');
+  if (link) navTo(link.dataset.sym, true);
+});
+
+document.getElementById('back-btn').addEventListener('click', goBack);
+document.getElementById('expand-all').addEventListener('click', () =>
+  document.getElementById('tree-scroll').querySelectorAll('details').forEach(d => d.open = true)
+);
+document.getElementById('collapse-all').addEventListener('click', () =>
+  document.getElementById('tree-scroll').querySelectorAll('details').forEach(d => d.open = false)
+);
+
+// ── Tree rendering ────────────────────────────────────────────────────────────
+function renderTree(symEl) {
+  const tl    = gEl(symEl, 'timeline');
+  const domTl = tl && gEl(tl, 'DOMTimeline');
+  const lyrs  = domTl && gEl(domTl, 'layers');
+  if (!lyrs) return '<div class="tree-empty">No timeline data</div>';
+  const all = gEls(lyrs, 'DOMLayer');
+  if (!all.length) return '<div class="tree-empty">No layers</div>';
+  return all.map((l, i) => renderLayer(l, i, all)).join('');
+}
+
+function renderLayer(layer, idx, all) {
+  const name  = layer.getAttribute('name') || `layer${idx}`;
+  const ltype = layer.getAttribute('layerType') || 'normal';
+  const pIdx  = layer.getAttribute('parentLayerIndex');
+
+  const bdClass = {mask:'bd-mask',masked:'bd-masked',guide:'bd-guide',folder:'bd-folder'}[ltype] || 'bd-normal';
+
+  let parStr = '';
+  if (pIdx !== null) {
+    const pl    = all[parseInt(pIdx, 10)];
+    const pname = pl ? (pl.getAttribute('name') || `layer${pIdx}`) : `?`;
+    const ptype = pl ? (pl.getAttribute('layerType') || 'normal') : '?';
+    parStr = ` <span class="par-ref">→ ${idx===parseInt(pIdx,10)?'(self?)':''}"${h(pname)}" [${ptype}]</span>`;
+  }
+
+  const framesEl = gEl(layer, 'frames');
+  const frames   = framesEl ? gEls(framesEl, 'DOMFrame') : [];
+  const frHtml   = frames.map(renderFrame).join('') || '<div class="no-elem">No frames</div>';
+  const isOpen   = ltype !== 'guide' && ltype !== 'folder';
+
+  return `<details${isOpen?' open':''}>
+  <summary>
+    <span class="tog"></span>
+    <span class="lyr-idx">${idx}</span>
+    <span class="bd ${bdClass}">${ltype}</span>
+    <span class="lyr-name">${h(name)}</span>${parStr}
+  </summary>
+  <div class="kids">${frHtml}</div>
+</details>`;
+}
+
+function renderFrame(frame) {
+  const idx  = parseInt(frame.getAttribute('index') || '0', 10);
+  const dur  = parseInt(frame.getAttribute('duration') || '1', 10);
+  const tw   = frame.getAttribute('tweenType') || '';
+  const range = dur === 1 ? `Frame ${idx}` : `Frames ${idx}–${idx+dur-1}`;
+  const twBd  = tw ? ` <span class="bd bd-normal">${tw}</span>` : '';
+
+  const elemsEl = gEl(frame, 'elements');
+  const elems   = elemsEl ? Array.from(elemsEl.children) : [];
+
+  if (!elems.length) return `<div class="no-elem">Frame ${idx}: empty</div>`;
+
+  const elHtml = elems.map(e => renderElem(e, 'layer', null)).join('');
+
+  return `<details>
+  <summary>
+    <span class="tog"></span>
+    <span class="fr-range">${range}</span>${twBd}
+    <span class="fr-dim">(${elems.length} elem${elems.length!==1?'s':''})</span>
+  </summary>
+  <div class="kids">${elHtml}</div>
+</details>`;
+}
+
+function renderElem(elem, ctx, parentMat) {
+  switch (elem.localName) {
+    case 'DOMShape':          return renderShape(elem, ctx, parentMat);
+    case 'DOMSymbolInstance': return renderInst(elem);
+    case 'DOMGroup':          return renderGroup(elem, ctx);
+    case 'DOMText':           return renderText(elem);
+    default:
+      return `<div class="er"><span class="tag-shape">${h(elem.localName)}</span></div>`;
+  }
+}
+
+function renderShape(shape, ctx, parentMat) {
+  const isDO  = shape.getAttribute('isDrawingObject') === 'true';
+  const edges = gAll(shape, 'Edge').length;
+  const m     = readMat(shape);
+  const ms    = matStr(m);
+
+  // matrix label
+  let matHtml;
+  if (!ms) {
+    matHtml = `<span class="m-id">identity</span>`;
+  } else if (ctx === 'group' && parentMat !== null) {
+    const redu = matEq(m, parentMat);
+    matHtml = redu
+      ? `<span class="m-inst">${h(ms)}</span> <span class="ml-redu">[REDUNDANT]</span>`
+      : `<span class="m-real">${h(ms)}</span> <span class="ml-real">[REAL]</span>`;
+  } else {
+    // layer level — always real
+    matHtml = `<span class="m-real">${h(ms)}</span> <span class="ml-real">[REAL]</span>`;
+  }
+
+  const doBd   = isDO ? '<span class="bd bd-do">DrawObj</span>' : '';
+  const edgeTx = `<span class="edges">${edges} edge${edges!==1?'s':''}</span>`;
+
+  const fc = fillColor(shape);
+  let fillHtml = '';
+  if (fc === 'gradient') fillHtml = '<span style="font-size:.72em;color:var(--dim)">gradient</span>';
+  else if (fc)           fillHtml = `<span class="swatch" style="background:${fc}" title="${fc}"></span>`;
+
+  return `<div class="er">
+  <span class="tag-shape">DOMShape</span>
+  ${doBd}${edgeTx}${fillHtml}${matHtml}
+</div>`;
+}
+
+function renderInst(inst) {
+  const lib = inst.getAttribute('libraryItemName') || '?';
+  const ff  = inst.getAttribute('firstFrame') || '0';
+  const st  = inst.getAttribute('symbolType') || '';
+  const m   = readMat(inst);
+  const ms  = matStr(m);
+
+  const exists   = flaSymbols.has(lib);
+  const linkHtml = exists
+    ? `<a class="inst-link" data-sym="${h(lib)}">${h(lib)}</a>`
+    : `<span style="color:var(--dim)">${h(lib)}</span>`;
+
+  const ffHtml  = ff !== '0' ? ` <span class="bd bd-ff">ff=${ff}</span>` : '';
+  const matHtml = ms ? `<span class="m-inst">${h(ms)}</span>` : '';
+
+  return `<div class="er">
+  <span class="tag-inst">Instance</span>
+  ${linkHtml}${ffHtml}${matHtml}
+</div>`;
+}
+
+function renderGroup(group, _ctx) {
+  const gm      = readMat(group);
+  const ms      = matStr(gm);
+  const matHtml = ms
+    ? `<span class="m-inst">${h(ms)}</span>`
+    : `<span class="m-id">identity</span>`;
+
+  const membersEl = gEl(group, 'members');
+  const kids      = membersEl ? Array.from(membersEl.children) : [];
+  const kidsHtml  = kids.map(c => renderElem(c, 'group', gm)).join('')
+                  || '<div class="no-elem">empty group</div>';
+
+  return `<details open>
+  <summary class="grp-sum">
+    <span class="tog"></span>
+    <span class="tag-grp">DOMGroup</span>
+    ${matHtml}
+    <span class="edges">(${kids.length} member${kids.length!==1?'s':''})</span>
+  </summary>
+  <div class="kids">${kidsHtml}</div>
+</details>`;
+}
+
+function renderText(txt) {
+  const content = txt.textContent.trim().slice(0, 50);
+  return `<div class="er">
+  <span class="tag-text">DOMText</span>
+  <span class="edges">${h(content)}</span>
+</div>`;
+}
+
+// ── App lifecycle ─────────────────────────────────────────────────────────────
+function showApp() {
+  document.getElementById('drop-zone').style.display = 'none';
+  document.getElementById('app').classList.add('on');
+}
+
+function resetApp() {
+  flaSymbols.clear();
+  navHistory = [];
+  current = null;
+  document.getElementById('drop-zone').style.display = '';
+  document.getElementById('app').classList.remove('on');
+  document.getElementById('search').value = '';
+  document.getElementById('tree-scroll').innerHTML =
+    '<div class="tree-empty">Select a symbol from the list</div>';
+}
+
+// ── Drag & drop ───────────────────────────────────────────────────────────────
+const dz = document.getElementById('drop-zone');
+
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) loadFLA(f);
+});
+
+document.getElementById('file-input').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) loadFLA(f);
+});
+</script>
+</body>
+</html>

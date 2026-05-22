@@ -546,11 +546,15 @@ def _iter_group_shapes_white(group_elem):
     if members is None:
         return
     a, b, c, d, tx, ty = read_matrix(group_elem.find(t('matrix')))
-    xf = None if (a,b,c,d,tx,ty) == (1.0,0.0,0.0,1.0,0.0,0.0) else f'matrix({a},{b},{c},{d},{tx},{ty})'
+    group_mat = (a, b, c, d, tx, ty)
+    xf = None if group_mat == _IDENTITY_MAT else f'matrix({a},{b},{c},{d},{tx},{ty})'
     inner = []
     for child in list(members):
         if child.tag == t('DOMShape'):
-            inner.extend(_shape_svg_white(child, _in_group=True))
+            # Suppress shape's own matrix only when Flash has mirrored the parent
+            # group's matrix onto it (redundant metadata). If different, it's real.
+            suppress = (read_matrix(child.find(t('matrix'))) == group_mat)
+            inner.extend(_shape_svg_white(child, _in_group=suppress))
         elif child.tag == t('DOMGroup'):
             inner.extend(_iter_group_shapes_white(child))
     if inner:
@@ -666,11 +670,13 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
         if members is None:
             return []
         a, b, c, d, tx, ty = read_matrix(group_elem.find(t('matrix')))
-        xf = None if (a,b,c,d,tx,ty) == (1.0,0.0,0.0,1.0,0.0,0.0) else f'matrix({a},{b},{c},{d},{tx},{ty})'
+        group_mat = (a, b, c, d, tx, ty)
+        xf = None if group_mat == _IDENTITY_MAT else f'matrix({a},{b},{c},{d},{tx},{ty})'
         inner = []
         for child in list(members):
             if child.tag == t('DOMShape'):
-                inner.extend(_shape_svg_white(child, _in_group=True) if white else _shape_svg(child, _defs, _grad_cache, _in_group=True))
+                suppress = (read_matrix(child.find(t('matrix'))) == group_mat)
+                inner.extend(_shape_svg_white(child, _in_group=suppress) if white else _shape_svg(child, _defs, _grad_cache, _in_group=suppress))
             elif child.tag == t('DOMGroup'):
                 inner.extend(_group_lines(child, white))
             elif child.tag == t('DOMSymbolInstance'):
@@ -788,13 +794,15 @@ def _collect_shape_pts(shape, _in_group=False):
 def _collect_group_pts(group_elem, mat):
     """Recursively collect world-space points from all DOMShapes inside a DOMGroup."""
     pts = []
-    effective = _compose_mat(mat, read_matrix(group_elem.find(t('matrix'))))
+    group_local_mat = read_matrix(group_elem.find(t('matrix')))
+    effective = _compose_mat(mat, group_local_mat)
     members = group_elem.find(t('members'))
     if members is None:
         return pts
     for child in list(members):
         if child.tag == t('DOMShape'):
-            for lx, ly in _collect_shape_pts(child, _in_group=True):
+            suppress = (read_matrix(child.find(t('matrix'))) == group_local_mat)
+            for lx, ly in _collect_shape_pts(child, _in_group=suppress):
                 pts.append(_apply_mat(effective, lx, ly))
         elif child.tag == t('DOMGroup'):
             pts.extend(_collect_group_pts(child, effective))
