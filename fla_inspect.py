@@ -491,6 +491,13 @@ def _shape_svg(shape, _defs=None, _grad_cache=None):
             f'<path d="{d}" fill="none" stroke="{color}" stroke-width="{weight:.1f}"'
             f' stroke-linecap="{caps}" stroke-linejoin="round"{opac}/>'
         )
+    # Flash "Drawing Objects" store their position as a matrix on the DOMShape
+    # element itself.  Apply it so geometry lands in the parent's coordinate space.
+    mc = shape.find(t('matrix'))
+    if mc is not None:
+        a, b, c, d, tx, ty = read_matrix(mc)
+        if (a, b, c, d, tx, ty) != (1.0, 0.0, 0.0, 1.0, 0.0, 0.0):
+            lines = [f'<g transform="matrix({a},{b},{c},{d},{tx},{ty})">'] + lines + ['</g>']
     return lines
 
 def _shape_svg_white(shape):
@@ -518,7 +525,13 @@ def _shape_svg_white(shape):
     d = _segs_to_svg_d(all_segs)
     if not d:
         return []
-    return [f'<path d="{d}" fill="white" fill-rule="evenodd" stroke="none"/>']
+    result = [f'<path d="{d}" fill="white" fill-rule="evenodd" stroke="none"/>']
+    mc = shape.find(t('matrix'))
+    if mc is not None:
+        a, b, c, d, tx, ty = read_matrix(mc)
+        if (a, b, c, d, tx, ty) != (1.0, 0.0, 0.0, 1.0, 0.0, 0.0):
+            result = [f'<g transform="matrix({a},{b},{c},{d},{tx},{ty})">'] + result + ['</g>']
+    return result
 
 
 def _iter_group_shapes_white(group_elem):
@@ -738,9 +751,10 @@ def _apply_mat(mat, x, y):
     return a*x + c*y + tx, b*x + d*y + ty
 
 def _collect_shape_pts(shape):
-    """Fill-edge geometry points in a DOMShape (local space, untransformed).
-    Stroke-only edges (no fillStyle0/1) are excluded — they can live at
-    arbitrary positions and would bloat the bounding box."""
+    """Fill-edge geometry points for a DOMShape, in the parent's local space.
+    Applies the shape's own matrix (present on Flash Drawing Objects) so
+    callers receive already-transformed points.
+    Stroke-only edges (no fillStyle0/1) are excluded."""
     pts = []
     for edge in shape.iter(t('Edge')):
         if not edge.get('fillStyle0') and not edge.get('fillStyle1'):
@@ -756,6 +770,11 @@ def _collect_shape_pts(shape):
             if c[0] == 'M':  pts.append((c[1], c[2]))
             elif c[0] == 'L': pts.append((c[1], c[2]))
             elif c[0] == 'Q': pts += [(c[1], c[2]), (c[3], c[4])]
+    mc = shape.find(t('matrix'))
+    if mc is not None:
+        sm = read_matrix(mc)
+        if sm != _IDENTITY_MAT:
+            pts = [_apply_mat(sm, x, y) for x, y in pts]
     return pts
 
 def _collect_group_pts(group_elem, mat):
