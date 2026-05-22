@@ -459,11 +459,33 @@ function h(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── ZIP EOCD fix (Adobe Animate writes a wrong CD-size field) ─────────────────
+// Port of Python's _fix_zip_eocd: rewrite the stored central-directory size to
+// match the real gap between the CD offset and the EOCD record.
+function fixZipEOCD(buf) {
+  const data = new Uint8Array(buf);
+  const len  = data.length;
+  if (len < 22) return buf;
+  const eocd = len - 22;
+  // Verify PK\x05\x06 signature
+  if (data[eocd]!==0x50||data[eocd+1]!==0x4B||data[eocd+2]!==0x05||data[eocd+3]!==0x06)
+    return buf;
+  const view        = new DataView(buf);
+  const cdOffset    = view.getUint32(eocd + 16, true);
+  const storedSize  = view.getUint32(eocd + 12, true);
+  const realSize    = eocd - cdOffset;
+  if (storedSize === realSize) return buf;
+  const patched = buf.slice(0);
+  new DataView(patched).setUint32(eocd + 12, realSize, true);
+  return patched;
+}
+
 // ── FLA loading ───────────────────────────────────────────────────────────────
 async function loadFLA(file) {
   let zip;
   try {
-    const buf = await file.arrayBuffer();
+    let buf = await file.arrayBuffer();
+    buf = fixZipEOCD(buf);
     zip = await JSZip.loadAsync(buf);
   } catch(e) {
     alert('Could not read FLA: ' + e.message);
@@ -475,7 +497,9 @@ async function loadFLA(file) {
   const jobs = [];
 
   for (const [fname, entry] of Object.entries(zip.files)) {
-    if (!fname.startsWith('LIBRARY/') || !fname.endsWith('.xml')) continue;
+    // Normalise backslashes so Windows-rezipped FLAs still match
+    const norm = fname.replace(/\\/g, '/');
+    if (!norm.startsWith('LIBRARY/') || !norm.endsWith('.xml')) continue;
     jobs.push(entry.async('string').then(text => {
       try {
         const doc = parser.parseFromString(text, 'text/xml');
