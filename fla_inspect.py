@@ -429,13 +429,19 @@ def _active_frame(layer, frame_num):
             return f
     return None
 
-def _shape_svg(shape, _defs=None, _grad_cache=None):
+def _shape_svg(shape, _defs=None, _grad_cache=None, _in_group=False):
     """Render a DOMShape as filled + stroked SVG paths.
 
     Each Edge element is split into individual segments.  fillStyle0 edges are
     added forward; fillStyle1 edges are reversed (fill-on-right → fill-on-left).
     strokeStyle edges are collected as-is (direction doesn't affect stroke appearance).
     All segment groups are stitched into contours before rendering.
+
+    _in_group=True suppresses the shape-level matrix transform.  Flash writes a
+    redundant <matrix> on shapes inside DOMGroups that duplicates the group's own
+    matrix; the group wrapper already applies it, so we must not apply it again.
+    Layer-level shapes (_in_group=False, the default) always need their matrix
+    applied — this covers both Drawing Objects and any positioned regular shapes.
     """
     fill_segs   = {}   # fill_idx   → list of segments
     fill_meta   = {}   # fill_idx   → (color_or_url, alpha)
@@ -491,16 +497,15 @@ def _shape_svg(shape, _defs=None, _grad_cache=None):
             f'<path d="{d}" fill="none" stroke="{color}" stroke-width="{weight:.1f}"'
             f' stroke-linecap="{caps}" stroke-linejoin="round"{opac}/>'
         )
-    # Flash "Drawing Objects" store their position as a matrix on the DOMShape
-    # element itself.  Apply it so geometry lands in the parent's coordinate space.
-    mc = shape.find(t('matrix'))
-    if mc is not None:
-        a, b, c, d, tx, ty = read_matrix(mc)
-        if (a, b, c, d, tx, ty) != (1.0, 0.0, 0.0, 1.0, 0.0, 0.0):
-            lines = [f'<g transform="matrix({a},{b},{c},{d},{tx},{ty})">'] + lines + ['</g>']
+    if not _in_group:
+        mc = shape.find(t('matrix'))
+        if mc is not None:
+            a, b, c, d, tx, ty = read_matrix(mc)
+            if (a, b, c, d, tx, ty) != (1.0, 0.0, 0.0, 1.0, 0.0, 0.0):
+                lines = [f'<g transform="matrix({a},{b},{c},{d},{tx},{ty})">'] + lines + ['</g>']
     return lines
 
-def _shape_svg_white(shape):
+def _shape_svg_white(shape, _in_group=False):
     """Like _shape_svg but renders ALL fills as white (for SVG <mask> use)."""
     all_segs = []
     for edge in shape.iter(t('Edge')):
@@ -526,11 +531,12 @@ def _shape_svg_white(shape):
     if not d:
         return []
     result = [f'<path d="{d}" fill="white" fill-rule="evenodd" stroke="none"/>']
-    mc = shape.find(t('matrix'))
-    if mc is not None:
-        a, b, c, d, tx, ty = read_matrix(mc)
-        if (a, b, c, d, tx, ty) != (1.0, 0.0, 0.0, 1.0, 0.0, 0.0):
-            result = [f'<g transform="matrix({a},{b},{c},{d},{tx},{ty})">'] + result + ['</g>']
+    if not _in_group:
+        mc = shape.find(t('matrix'))
+        if mc is not None:
+            a, b, c, d, tx, ty = read_matrix(mc)
+            if (a, b, c, d, tx, ty) != (1.0, 0.0, 0.0, 1.0, 0.0, 0.0):
+                result = [f'<g transform="matrix({a},{b},{c},{d},{tx},{ty})">'] + result + ['</g>']
     return result
 
 
@@ -544,7 +550,7 @@ def _iter_group_shapes_white(group_elem):
     inner = []
     for child in list(members):
         if child.tag == t('DOMShape'):
-            inner.extend(_shape_svg_white(child))
+            inner.extend(_shape_svg_white(child, _in_group=True))
         elif child.tag == t('DOMGroup'):
             inner.extend(_iter_group_shapes_white(child))
     if inner:
@@ -664,7 +670,7 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
         inner = []
         for child in list(members):
             if child.tag == t('DOMShape'):
-                inner.extend(_shape_svg_white(child) if white else _shape_svg(child, _defs, _grad_cache))
+                inner.extend(_shape_svg_white(child, _in_group=True) if white else _shape_svg(child, _defs, _grad_cache, _in_group=True))
             elif child.tag == t('DOMGroup'):
                 inner.extend(_group_lines(child, white))
             elif child.tag == t('DOMSymbolInstance'):
@@ -750,10 +756,11 @@ def _apply_mat(mat, x, y):
     a, b, c, d, tx, ty = mat
     return a*x + c*y + tx, b*x + d*y + ty
 
-def _collect_shape_pts(shape):
+def _collect_shape_pts(shape, _in_group=False):
     """Fill-edge geometry points for a DOMShape, in the parent's local space.
-    Applies the shape's own matrix (present on Flash Drawing Objects) so
-    callers receive already-transformed points.
+    Applies the shape's own matrix for layer-level shapes (_in_group=False).
+    Shapes inside DOMGroups (_in_group=True) skip this — the group's matrix is
+    applied by the caller (_collect_group_pts) instead.
     Stroke-only edges (no fillStyle0/1) are excluded."""
     pts = []
     for edge in shape.iter(t('Edge')):
@@ -770,11 +777,12 @@ def _collect_shape_pts(shape):
             if c[0] == 'M':  pts.append((c[1], c[2]))
             elif c[0] == 'L': pts.append((c[1], c[2]))
             elif c[0] == 'Q': pts += [(c[1], c[2]), (c[3], c[4])]
-    mc = shape.find(t('matrix'))
-    if mc is not None:
-        sm = read_matrix(mc)
-        if sm != _IDENTITY_MAT:
-            pts = [_apply_mat(sm, x, y) for x, y in pts]
+    if not _in_group:
+        mc = shape.find(t('matrix'))
+        if mc is not None:
+            sm = read_matrix(mc)
+            if sm != _IDENTITY_MAT:
+                pts = [_apply_mat(sm, x, y) for x, y in pts]
     return pts
 
 def _collect_group_pts(group_elem, mat):
@@ -786,7 +794,7 @@ def _collect_group_pts(group_elem, mat):
         return pts
     for child in list(members):
         if child.tag == t('DOMShape'):
-            for lx, ly in _collect_shape_pts(child):
+            for lx, ly in _collect_shape_pts(child, _in_group=True):
                 pts.append(_apply_mat(effective, lx, ly))
         elif child.tag == t('DOMGroup'):
             pts.extend(_collect_group_pts(child, effective))
