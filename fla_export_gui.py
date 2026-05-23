@@ -387,7 +387,7 @@ button.danger { border-color: var(--red); color: var(--red); background: rgba(24
       <button onclick="selNone()">None</button>
       <button onclick="selValid()">Valid only</button>
       <button onclick="selInvert()">Invert</button>
-      <label><input type="checkbox" id="chk-transparent"> Transparent bg</label>
+      <label><input type="checkbox" id="chk-transparent" checked> Transparent bg</label>
     </div>
     <div id="frame-grid"><div class="empty-msg">Select a symbol</div></div>
   </div>

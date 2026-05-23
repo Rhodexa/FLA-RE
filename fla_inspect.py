@@ -762,8 +762,6 @@ def _render_sym(name, symbols, inst_frame=0, visited=None, _defs=None, _grad_cac
     for i, layer in reversed(list(enumerate(all_layers))):
         ltype = layer.get('layerType', 'normal')
         if ltype in ('guide', 'folder'): continue
-        if layer.get('visible') == 'false' and ltype != 'mask':
-            continue
         if i in consumed: continue   # handled inside its mask group
 
         if masking and ltype == 'mask':
@@ -885,7 +883,6 @@ def _bbox_sym(name, symbols, inst_frame=0, visited=None, mat=None):
 
     for layer in layers_e:
         if layer.get('layerType') in ('guide', 'folder'): continue
-        if layer.get('visible') == 'false':               continue
         frame = _active_frame(layer, inst_frame)
         if frame is None: continue
         elements = frame.find(t('elements'))
